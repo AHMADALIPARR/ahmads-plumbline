@@ -74,3 +74,13 @@ Term *gc_alloc(TermTag tag) {
     live_count++;
     return t;
 }
+
+// Safe field accessors
+TermTag term_tag(const Term *t)                 { return t->tag; }
+void    term_set_int(Term *t, int64_t v)        { t->data.ival = v; }
+int64_t term_get_int(const Term *t)             { return t->data.ival; }
+void    term_bind_var(Term *var, Term *val)     { var->data.binding = val; }
+Term   *term_get_binding(const Term *var)       { return var->data.binding; }
+void    term_set_cons(Term *t, Term *h, Term *tl){ t->data.cons.head = h; t->data.cons.tail = tl; }
+Term   *term_get_head(const Term *t)            { return t->data.cons.head; }
+Term   *term_get_tail(const Term *t)            { return t->data.cons.tail; }
