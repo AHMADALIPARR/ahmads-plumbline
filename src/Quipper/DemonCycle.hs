@@ -18,22 +18,30 @@ module Quipper.DemonCycle where
 
 import Quipper
 
--- | Prepare a coherent state on n qubits (Hadamard on each)
-prepareCoherent :: Int -> Circ [Qubit]
+-- | Sketch of the Quantum-Coherent Demon Cycle in Quipper
+-- Based on the algorithm in the spec: prepare, measure/sort, erase to battery
+
+type Register = [Qubit]
+type Battery = [Qubit]  -- simplified oscillator approximation
+
+-- | Prepare coherent register |+>^N
+prepareCoherent :: Int -> Circ Register
 prepareCoherent n = do
   qs <- qinit (replicate n False)
-  mapUnary hadamard qs
+  mapM_ hadamard qs
   return qs
 
--- | Placeholder unitary erase into battery register
-eraseToBattery :: [Qubit] -> [Qubit] -> Circ ()
-eraseToBattery sys bat =
-  sequence_ [ controlled_not (s, b) | (s, b) <- zip sys bat ]
+-- | Simple erasure swap into battery (GJW-style placeholder)
+eraseToBattery :: Register -> Battery -> Circ (Register, Battery)
+eraseToBattery reg bat = do
+  -- Placeholder for unitary swap of information into battery excitations
+  sequence_ [controlled_not q b | (q, b) <- zip reg bat]
+  return (reg, bat)
 
--- | Full coherent demon cycle sketch
-demonCycle :: Int -> Circ ([Qubit], [Qubit])
+-- | Full cycle entry point (simplified)
+demonCycle :: Int -> Circ (Register, Battery)
 demonCycle n = do
-  sys <- prepareCoherent n
+  reg <- prepareCoherent n
   bat <- qinit (replicate n False)
-  eraseToBattery sys bat
-  return (sys, bat)
+  (reg', bat') <- eraseToBattery reg bat
+  return (reg', bat')
