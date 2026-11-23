@@ -1,0 +1,32 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+-- Category-theoretic scaffolding for quantum circuits and cellular automata.
+-- Objects are finite-dimensional Hilbert spaces (arrays of amplitudes).
+-- Morphisms are linear maps (array-parallel matrix-vector products).
+
+def compose (f: n=>m=>Float) (g: m=>p=>Float) : n=>p=>Float =
+  for i j. sum (for k. f[i, k] * g[k, j])
+
+def id (n: Nat) : n=>n=>Float =
+  for i j. if i == j then 1.0 else 0.0
+
+-- Tensor product of two maps (Kronecker), expressed as a 4-index array
+def tensor (a: n=>m=>Float) (b: p=>q=>Float) : (n*p)=>(m*q)=>Float =
+  for i j.
+    let (i1, i2) = (i / p, i % p)
+        (j1, j2) = (j / q, j % q)
+    in a[i1, j1] * b[i2, j2]
