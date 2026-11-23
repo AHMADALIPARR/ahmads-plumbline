@@ -824,3 +824,26 @@ Empty elements are `arg` and `var`. Unexpected forms raise errors.
 | Liquid | optional | Refinements |
 
 
+
+## 25. Quipper Turing directory
+
+Binary serialization and checksums are handled in Go. Typed circuit semantics and transformations are handled in Haskell.
+
+| Path | Language | Role |
+|------|----------|------|
+| `src/Quipper/Turing.go` | Go | Binary format, SHA-256 / CRC32 / FNV checksums, manifests, `TuringError` codes |
+| `src/Quipper/Turing.hs` | Haskell | Typed semantics, error-code mapping, manifest and trace validation |
+| `src/Quipper/Gates.hs` | Haskell | `GateType` enumeration, `Gate` record, `validateGate` |
+| `src/Quipper/Circuit.hs` | Haskell | `Circuit` / `Wire`, depth, qubit counts, `addGate`, `reverseCircuit` |
+
+### Shared error codes
+
+Both sides use the same numeric order:
+
+```
+ErrNone, ErrInvalidMagic, ErrUnsupportedVersion, ErrChecksumMismatch,
+ErrGateCountMismatch, ErrWireCountMismatch, ErrEmptyCircuit,
+ErrInvalidGate, ErrDuplicateWire, ErrQubitCountMismatch
+```
+
+Go owns serialization and checksum computation. Haskell owns gate and circuit validation and maps `CircuitError` to `TuringError`.
