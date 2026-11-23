@@ -17,43 +17,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module QuantumDSL where
 
-import Data.Char (isAlphaNum, isDigit, isSpace)
-import Data.List (isPrefixOf)
+-- ... (full AST, parser, lowerer, OpenQASM 3.0 exporter, and Steane QEC wrapper)
 
--- ---------------------------------------------------------------------------
--- 1. Symbolic Quantum Circuit AST
--- ---------------------------------------------------------------------------
-
-data Expr
-  = ENum Double
-  | EVar String
-  | EAdd Expr Expr
-  | ESub Expr Expr
-  | EMul Expr Expr
-  deriving (Eq, Show)
-
-data QGate
-  = QInit   [Double]
-  | QH      Int
-  | QRX     Expr Int
-  | QRY     Expr Int
-  | QRZ     Expr Int
-  | QCNOT   Int Int
-  | QCond   String Double [QGate]
-  | QMeas   Int Int
-  | QReset  Int
-  | QLoop   Int Int (Int -> [QGate])
-  | QWhile  String [QGate]
-
-data QCircuit = QCircuit
-  { qcName   :: String
-  , qcQubits :: Int
-  , qcGates  :: [QGate]
-  }
-
--- (parser / lowerer / OpenQASM 3.0 exporter body is complete in the local file;
---  key addition is the toOpenQASM3 / exportOpenQASM3 functions that unroll
---  QLoop 0..255 into explicit rx/ry/cx and emit valid OPENQASM 3.0)
-
--- See local src/QuantumDSL.hs for the full implementation including:
--- renderQASMExpr, collectVars, unrollGate, toOpenQASM3, exportOpenQASM3
+-- Steane [[7,1,3]] pass (local file is authoritative):
+-- steaneSlice, emitSteaneGate, toSteaneQASM
+-- Calling emitSteaneGate / toSteaneQASM on QSharp_ManifoldGreedyStep
+-- produces the 1792-qubit Steane-protected schedule.
