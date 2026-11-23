@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 140" width="280" height="140">
+  <title>Majorana Coupling Topology</title>
+  <desc>Four-Majorana interaction vertices</desc>
+  <circle cx="70" cy="40" r="8" fill="none" stroke="#333" stroke-width="1"/>
+  <circle cx="210" cy="40" r="8" fill="none" stroke="#333" stroke-width="1"/>
+  <circle cx="70" cy="100" r="8" fill="none" stroke="#333" stroke-width="1"/>
+  <circle cx="210" cy="100" r="8" fill="none" stroke="#333" stroke-width="1"/>
+  <text x="70" y="28" text-anchor="middle" font-size="8" font-family="system-ui">χ₁</text>
+  <text x="210" y="28" text-anchor="middle" font-size="8" font-family="system-ui">χ₂</text>
+  <text x="70" y="118" text-anchor="middle" font-size="8" font-family="system-ui">χ₃</text>
+  <text x="210" y="118" text-anchor="middle" font-size="8" font-family="system-ui">χ₄</text>
+  <path d="M78 40 L202 40" stroke="#666" stroke-width="0.8"/>
+  <path d="M70 48 L70 92" stroke="#666" stroke-width="0.8"/>
+  <path d="M210 48 L210 92" stroke="#666" stroke-width="0.8"/>
+  <path d="M78 100 L202 100" stroke="#666" stroke-width="0.8"/>
+  <path d="M78 48 L202 92" stroke="#999" stroke-width="0.5" stroke-dasharray="2 2"/>
+  <text x="140" y="75" text-anchor="middle" font-size="8" font-family="system-ui">J_{ijkl}</text>
+</svg>
