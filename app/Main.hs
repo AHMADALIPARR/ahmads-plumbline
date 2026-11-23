@@ -17,10 +17,12 @@
 module Main where
 
 import Liquid.WorkBudget
-import Liquid.CNOTTheorem
 
 main :: IO ()
 main = do
-  putStrLn "Ahmad's Plumbline"
-  print (coherentDemonWorkPerBit 300 1e12 1.0545718e-34)
-  print theorem_cnot_entangle
+  let t = 300.0
+      omega = 2.0 * pi * 1e12
+      hbar = 1.054571817e-34
+      budget = coherentDemonWorkPerBit t omega hbar
+  print budget
+  print (netIsNegativeTwo budget)
