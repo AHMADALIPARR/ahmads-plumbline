@@ -38,6 +38,7 @@
             haskell-language-server
             gcc
             gdb
+            ats2
             opensp # optional: onsgmls for strict SGML DTD validation
           ];
         };
