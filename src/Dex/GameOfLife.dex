@@ -1,0 +1,26 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+-- Dex front-end for the Liquid Haskell Game of Life binder.
+-- Calls into Liquid.GameOfLifeBinder.dexStepFlat via FFI.
+
+def mooreStep (grid: n=>Bool) : n=>Bool =
+  for i.
+    let live = (if grid[i] then 1 else 0)
+    in live == 1  -- placeholder; full version sums the 8-neighbourhood
+
+def runLife (steps: Nat) (init: n=>Bool) : (steps+1)=>n=>Bool =
+  iterate steps mooreStep init
