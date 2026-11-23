@@ -279,7 +279,7 @@ OR-parallel search, full unification with occurs-check, trail, committed-choice 
 Given variable index $v < 64$ and value index $u$:
 
 1. Store `D_VAR` pointing to $u$ at `term_arena[v]`.
-2. Let $W = \texttt{active\_mask} \land \lnot\texttt{ready\_mask}$.
+2. Let \(W = \mathrm{active\_mask} \land \lnot\mathrm{ready\_mask}\).
 3. For each set bit $g$ in $W$: clear bit $v$ in `goals[g].wait_mask`; if the result is zero, set bit $g$ in `ready_mask`.
 
 ---
@@ -634,8 +634,8 @@ flowchart TD
 
 | Symbol | Meaning in this repository |
 |--------|----------------------------|
-| $w = (v \ll 3) \lor t$ | Dense tagged word |
-| $\texttt{wait\_mask}$ | Bit $v$ set ⇒ suspended on variable $v$ |
+| \(w = (v \ll 3) \lor t\) | Dense tagged word |
+| \(\mathrm{wait\_mask}\) | Bit \(v\) set ⇒ suspended on variable \(v\) |
 | $C = 2\lvert a_{00}a_{11}-a_{01}a_{10}\rvert$ | UA `CalcDeg` |
 | $k_B T \ln 2$ | Landauer energy used in `WorkBudget` |
 | $[[n,k,d]]$ | Stabilizer code parameters (documented counts only) |
