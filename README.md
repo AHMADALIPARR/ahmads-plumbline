@@ -68,40 +68,40 @@ The dense runtime and the quantum emitters are independent. `src/QuantumToDense.
 A `DWord` is a 64-bit word with a 3-bit tag in the low bits:
 
 $$
-w = (v \ll 3) \lor t,\qquad t \in \{0,1,2\}
+w = (v \ll 3) \lor t, \qquad t \in \{0,1,2\}
 $$
 
 corresponding to `D_INT`, `D_VAR`, `D_UNBOUND`. Payload extraction is an arithmetic right shift by 3.
 
 **Suspension mask.**  
-For a goal $g$ and variable index $v < 64$,
+For a goal \(g\) and variable index \(v < 64\),
 
 $$
-v \in \texttt{wait\_mask}(g) \iff \text{the input-mode argument at } v \text{ is unbound}.
+v \in \mathrm{wait\_mask}(g) \iff \text{the input-mode argument at } v \text{ is unbound}.
 $$
 
-Binding variable $v$ executes
+Binding variable \(v\) executes
 
 $$
-\texttt{wait\_mask}(g) \leftarrow \texttt{wait\_mask}(g) \land \lnot(1 \ll v)
+\mathrm{wait\_mask}(g) \leftarrow \mathrm{wait\_mask}(g) \land \lnot(1 \ll v)
 $$
 
-for every waiting goal, then promotes $g$ if the mask becomes zero.
+for every waiting goal, then promotes \(g\) if the mask becomes zero.
 
 **Simplified concurrence (UA `CalcDeg`).**  
-For amplitudes $a_{00}, a_{01}, a_{10}, a_{11}$,
+For amplitudes \(a_{00}, a_{01}, a_{10}, a_{11}\),
 
 $$
-C = 2 \bigl| a_{00} a_{11} - a_{01} a_{10} \bigr|.
+C = 2 \lvert a_{00} a_{11} - a_{01} a_{10} \rvert.
 $$
 
-`Liquid.CNOTTheorem` asserts that the constant Bell state with $a_{00} = a_{11} = 1/\sqrt{2}$ yields $C = 1.0$.
+`Liquid.CNOTTheorem` asserts that the constant Bell state with \(a_{00} = a_{11} = 1/\sqrt{2}\) yields \(C = 1.0\).
 
 **Landauer work budget.**  
-With $k_B T \ln 2$ the Landauer energy, the arithmetic in `Liquid.WorkBudget.coherentDemonWorkPerBit` yields
+With \(k_B T \ln 2\) the Landauer energy, the arithmetic in `Liquid.WorkBudget.coherentDemonWorkPerBit` yields
 
 $$
-W_{\text{net incl prep}} = -2\, k_B T \ln 2
+W_{\mathrm{net\ incl\ prep}} = -2\, k_B T \ln 2
 $$
 
 under the sign conventions of that module.
@@ -513,9 +513,9 @@ No optimization or noise-aware compilation is performed.
 
 ## 24. Runtime and Memory Invariants
 
-- Dense arena indices remain $< \texttt{MAX_TERMS}$.
-- Goal slots used by `dense_spawn` must be $< 64$.
-- Variable indices used in masks must be $< 64$; larger indices are ignored by the mask logic.
+- Dense arena indices remain \(< \mathrm{MAX\_TERMS}\).
+- Goal slots used by `dense_spawn` must be \(< 64\).
+- Variable indices used in masks must be \(< 64\); larger indices are ignored by the mask logic.
 - `ready_mask` is always a subset of `active_mask` after every public operation.
 - Raw GC roots must be pushed before allocation that should survive collection.
 
