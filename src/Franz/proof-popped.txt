@@ -1,0 +1,36 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+[QA5] Asking: ((POS MORTAL (CONST SOCRATES)))
+[REACTIVE] posted NEW-CLAUSE at clock 0
+[DEMON] new clause 1: ((NEG ANIMAL (VAR X)) (POS MORTAL (VAR X)))
+[REACTIVE] posted NEW-CLAUSE at clock 1
+[DEMON] new clause 2: ((POS ANIMAL (CONST SOCRATES)))
+[REACTIVE] posted NEW-CLAUSE at clock 2
+[DEMON] new clause 3: ((NEG MORTAL (CONST SOCRATES)) (POS ANSWER (CONST YES)))
+[REACTIVE] posted NEW-CLAUSE at clock 3
+[DEMON] new clause 4: ((POS ANSWER (CONST YES)) (NEG ANIMAL (VAR X)) (POS MORTAL (VAR X)))
+*** PROOF FOUND via clause 5 ***
+[REACTIVE] posted PROOF-COMPLETE at clock 4
+----- PROOF TRACE -----
+Clause 5: NIL
+  Clause 4: ((POS ANSWER (CONST YES)) (NEG ANIMAL (VAR X)) (POS MORTAL (VAR X)))
+    Clause 3: ((NEG MORTAL (CONST SOCRATES)) (POS ANSWER (CONST YES)))
+    Clause 1: ((NEG ANIMAL (VAR X)) (POS MORTAL (VAR X)))
+  Clause 2: ((POS ANIMAL (CONST SOCRATES)))
+[QA5] Answers: ((CONST YES))
+
+POPPED: Socrates is mortal. Proof extracted via reactive demons.
