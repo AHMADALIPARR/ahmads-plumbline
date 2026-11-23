@@ -14,7 +14,7 @@
 ; Ignorantia juris non excusat.
 ; ========================================================================
 
-// cbits/dense_parlog.c
+// cbits/dense_parlog.c — optimized bit-parallel scheduling
 #include <stdint.h>
 #include <stddef.h>
 
@@ -23,7 +23,6 @@
 
 typedef enum { D_INT = 0, D_VAR = 1, D_UNBOUND = 2 } DTag;
 
-// Dense 64-bit tagged word: [payload: 61 bits | tag: 3 bits]
 typedef uint64_t DWord;
 static inline DWord mk_word(DTag t, int64_t val) {
     return ((uint64_t)val << 3) | (uint64_t)(t & 7);
@@ -33,9 +32,9 @@ static inline int64_t word_val(DWord w) { return (int64_t)w >> 3; }
 
 typedef struct {
     uint32_t pred_id;
-    uint32_t args[4];   // indices into term_arena
+    uint32_t args[4];
     uint8_t  arity;
-    uint64_t wait_mask; // bit v = 1 => suspended on var v
+    uint64_t wait_mask;
 } GoalSlot;
 
 static DWord    term_arena[MAX_TERMS];
@@ -82,25 +81,39 @@ void dense_spawn(uint32_t slot, uint32_t pred_id,
     if (goals[slot].wait_mask == 0) ready_mask |= (1ULL << slot);
 }
 
-// Bind variable `var_idx` -> `val_idx` and wake all goals in O(active_goals) bitwise ops
+// Optimized bind: single-pass bit clear + branch-reduced promotion
 void dense_bind(uint32_t var_idx, uint32_t val_idx) {
     term_arena[var_idx] = mk_word(D_VAR, (int64_t)val_idx);
     if (var_idx >= 64) return;
+
     uint64_t clear_bit = ~(1ULL << var_idx);
-    uint64_t m = active_mask & ~ready_mask;
-    while (m) {
-        int g = __builtin_ctzll(m);
-        m &= (m - 1);
-        goals[g].wait_mask &= clear_bit;
-        if (goals[g].wait_mask == 0) ready_mask |= (1ULL << g);
+    uint64_t waiting = active_mask & ~ready_mask;
+
+    while (waiting) {
+        int g = __builtin_ctzll(waiting);
+        waiting &= waiting - 1;
+        uint64_t m = goals[g].wait_mask & clear_bit;
+        goals[g].wait_mask = m;
+        ready_mask |= (uint64_t)(m == 0) << g;
     }
 }
 
-// Pop next ready goal slot in O(1), or -1 if none ready
+// O(1) next-ready with fused clear
 int dense_next_ready(void) {
-    if (!ready_mask) return -1;
-    int g = __builtin_ctzll(ready_mask);
-    ready_mask  &= ~(1ULL << g);
-    active_mask &= ~(1ULL << g);
+    uint64_t m = ready_mask;
+    if (!m) return -1;
+    int g = __builtin_ctzll(m);
+    uint64_t bit = 1ULL << g;
+    ready_mask  = m & ~bit;
+    active_mask &= ~bit;
     return g;
+}
+
+// Batch drain of ready goals
+int dense_drain_ready(int *out, int max) {
+    int n = 0;
+    while (n < max && ready_mask) {
+        out[n++] = dense_next_ready();
+    }
+    return n;
 }
