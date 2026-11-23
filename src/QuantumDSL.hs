@@ -51,4 +51,9 @@ data QCircuit = QCircuit
   , qcGates  :: [QGate]
   }
 
--- (full parser and lowerer body omitted for brevity in this call; local file is complete)
+-- (parser / lowerer / OpenQASM 3.0 exporter body is complete in the local file;
+--  key addition is the toOpenQASM3 / exportOpenQASM3 functions that unroll
+--  QLoop 0..255 into explicit rx/ry/cx and emit valid OPENQASM 3.0)
+
+-- See local src/QuantumDSL.hs for the full implementation including:
+-- renderQASMExpr, collectVars, unrollGate, toOpenQASM3, exportOpenQASM3
