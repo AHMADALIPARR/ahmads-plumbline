@@ -2,16 +2,20 @@
   <title>Qubit entanglement circuit</title>
   <desc>Hadamard followed by CNOT producing the Bell state Phi-plus from |00>.</desc>
   <g stroke="#1a1a1a" stroke-width="1.2" fill="none" stroke-linecap="round">
+    <!-- Wires -->
     <line x1="40" y1="50" x2="280" y2="50" />
     <line x1="40" y1="110" x2="280" y2="110" />
+    <!-- Hadamard box -->
     <rect x="70" y="38" width="22" height="24" fill="none" />
     <text x="81" y="55" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#1a1a1a">H</text>
+    <!-- CNOT -->
     <circle cx="140" cy="50" r="4" fill="#1a1a1a" />
     <line x1="140" y1="50" x2="140" y2="110" />
     <circle cx="140" cy="110" r="8" fill="none" />
     <line x1="132" y1="110" x2="148" y2="110" />
     <line x1="140" y1="102" x2="140" y2="118" />
   </g>
+  <!-- Bloch sphere (minimal) -->
   <g stroke="#1a1a1a" stroke-width="1" fill="none">
     <ellipse cx="250" cy="50" rx="22" ry="22" />
     <ellipse cx="250" cy="50" rx="22" ry="8" />
