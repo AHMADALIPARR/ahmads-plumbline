@@ -1,6 +1,6 @@
 # Ahmad's Plumbline
 
-Dense committed-choice parallel-logic runtime, symbolic quantum-circuit DSL with OpenQASM 3.0 emitters, Liquid Haskell refinements, Quipper circuit construction (including SYK and DemonHole), Dex array modules, and supporting Curry, Lisp, Scala, ATS, and SGML artifacts.
+Dense committed-choice parallel-logic runtime, symbolic quantum-circuit DSL with OpenQASM 3.0 emitters, Liquid Haskell refinements, and Quipper circuit construction (including an SYK/wormhole module).
 
 **Maintainers.** Ahmad Ali Parr, Jessica Westerhoff, SnapKitty Research Lab.  
 **Copyright.** 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.  
@@ -8,57 +8,39 @@ Dense committed-choice parallel-logic runtime, symbolic quantum-circuit DSL with
 
 ![Wormhole spatial geometry](docs/svg/wormhole-geometry.svg)
 
-## Layout
-
-```
-ahmads-plumbline/
-├── .github/workflows/ci.yml
-├── LICENSE, LICENSE-AGPL-3.0.txt
-├── app/Main.hs
-├── ats/
-├── cbits/
-├── docs/
-├── nix/flake.nix
-├── qasm/
-├── scala/
-└── src/
-    ├── AhmadsPlumbline/
-    ├── Dex/
-    ├── Franz/
-    ├── Liquid/
-    ├── Parlog/
-    ├── Quipper/
-    └── UA/
-```
-
-## Subsystems
-
-| Subsystem | Location | Role |
-|-----------|----------|------|
-| Dense PARLOG | `cbits/dense_parlog.c` | 64-slot arena, bit-mask suspension and ready queues |
-| Raw GC | `cbits/raw_gc.{h,c}` | Independent mark-sweep term heap |
-| Quantum DSL | `src/QuantumDSL.hs` | AST, UA lowerer, OpenQASM / Steane / Surface-17 / color emitters |
-| Dense morph | `src/DenseMorph.hs` | Linear morph of goals into dense slots |
-| Liquid | `src/Liquid/` | Work budget, concurrence, Game-of-Life binder |
-| Quipper | `src/Quipper/`, `src/AhmadsPlumbline/` | Circuit construction, DemonHole, SYK, Game of Life |
-| Dex | `src/Dex/` | Array-parallel category theory, entanglement, L-systems, quantum CA |
-| ATS | `ats/` | Indexed affine and linear stacks |
-| QASM | `qasm/` | Steane, Surface-17, color-code circuits |
-
-![Qubit entanglement circuit](docs/svg/qubit-entanglement.svg)
-
 ## Dense ready-mask wave
 
-Rule: at time \( t \), slot \( i \) is marked if bit \( ((i + t) \bmod 16) \) is set; density follows a sine envelope.
+Rule: at time \( t \), slot \( i \) is marked if bit \( ((i + t) \bmod 16) \) is set; character density follows a sine envelope.
 
 ```text
 dense ready-mask  (16 slots, sine envelope)
 t \i 0123456789012345
 0    **#%@%#*=:.   .:
 1    *#%@%#*=:.   .:*
+2    #%@%#*=:.   .:**
+3    %@%#*=:.   .:**#
+4    @%#*=:.   .:**#%
+5    %#*=:.   .:**#%@
+6    #*=:.   .:**#%@%
+7    *=:.   .:**#%@%#
+8    =:.   .:**#%@%#*
+9    :.   .:**#%@%#*=
+0    .   .:**#%@%#*=:
+1       .:**#%@%#*=:.
+2      .:**#%@%#*=:.
+3     .:**#%@%#*=:.
+4    .:**#%@%#*=:.
+5    :**#%@%#*=:.   .
+6    **#%@%#*=:.   .:
+7    *#%@%#*=:.   .:*
+8    #%@%#*=:.   .:**
+9    %@%#*=:.   .:**#
 ready bits travel left-to-right; density ~ sin
 rule: bit((i+t) mod 16) and sine envelope
+
 ```
+
+![Qubit entanglement circuit](docs/svg/qubit-entanglement.svg)
 
 ## File inventory
 
