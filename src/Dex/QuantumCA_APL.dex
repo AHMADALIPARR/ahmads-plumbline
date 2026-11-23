@@ -1,0 +1,71 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+-- Dex array functions simulating Dyalog APL idioms
+-- for a full quantum cellular automaton.
+--
+-- APL-style operations expressed with Dex for-comprehensions:
+--   outer product  ~ for i j. f(a[i], b[j])
+--   scan / prefix  ~ cumulative for-reduction
+--   rank-1 reduce  ~ sum / max over an axis
+--   stencil        ~ neighbourhood gather
+
+-- Outer product (APL ∘.f)
+def outer (f: a -> b -> c) (xs: n=>a) (ys: m=>b) : n=>m=>c =
+  for i j. f (xs[i]) (ys[j])
+
+-- Prefix scan (APL \\)
+def scan (f: a -> a -> a) (z: a) (xs: n=>a) : n=>a =
+  for i.
+    foldl f z (for j. if j <= i then xs[j] else z)
+
+-- Rank-1 sum (APL +/)
+def sum1 (xs: n=>Float) : Float =
+  sum (for i. xs[i])
+
+-- Stencil: gather a 3-cell neighbourhood (APL 3/ or window)
+def stencil3 (grid: n=>Float) : n=>3=>Float =
+  for i.
+    for k. grid[i + k - 1]
+
+-- Quantum elementary CA step.
+-- Each cell holds a complex amplitude (real part only for simplicity).
+-- The local unitary is a 8x8 matrix indexed by the 3-bit neighbourhood,
+-- applied in parallel via outer-product-style indexing.
+def qcaStep (rule: (Fin 8)=>(Fin 2)=>Float) (grid: n=>Float) : n=>Float =
+  for i.
+    let nb = stencil3 grid
+        -- pack neighbourhood into a 0..7 index (APL encode)
+        idx = (if nb[i, 0] > 0.5 then 4 else 0)
+            + (if nb[i, 1] > 0.5 then 2 else 0)
+            + (if nb[i, 2] > 0.5 then 1 else 0)
+    in rule[idx, 1] * grid[i] + rule[idx, 0] * (1.0 - grid[i])
+
+-- Full quantum CA: iterate the parallel step.
+-- The array dimension n is the spatial width; every cell updates
+-- simultaneously (APL rank-1 each).
+def runQCA (rule: (Fin 8)=>(Fin 2)=>Float) (steps: Nat) (init: n=>Float) : (steps+1)=>n=>Float =
+  iterate steps (qcaStep rule) init
+
+-- Example rule table (Wolfram-like, but amplitude-valued)
+def rule30Amp : (Fin 8)=>(Fin 2)=>Float =
+  for i j.
+    let bit = (i .&. (1 << j)) /= 0
+    in if bit then 1.0 else 0.0
+
+-- Seed from a single excitation (APL ⍳ and =)
+def singleExcitation (n: Nat) : n=>Float =
+  for i. if i == n / 2 then 1.0 else 0.0
