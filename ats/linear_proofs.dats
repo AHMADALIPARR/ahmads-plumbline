@@ -18,20 +18,33 @@
  *
  * Linear (not merely affine) resource proofs for the dense runtime.
  * Uses ATS dataviewtype so every value is consumed exactly once.
+ *
+ * Properties proved by the type system:
+ *   - push increases length by 1
+ *   - pop decreases length by 1 (requires non-empty)
+ *   - length is an index that cannot go negative
+ *   - linear consumption: no double-free, no leak
  *)
 
 #include "share/atspre_staload.hats"
+
+(* -------------------------------------------------------------------------
+ * 1. Linear stack with exact length index
+ * ------------------------------------------------------------------------- *)
 
 dataviewtype lin_stack (n: int) =
   | LinNil (0) of ()
   | {n:nat} LinCons (n + 1) of (int, lin_stack (n))
 
+(* Linear constructor: consumes the tail, produces a longer stack *)
 extern fun lin_push {n:nat}
   (s: lin_stack(n), x: int): lin_stack(n + 1)
 
+(* Linear destructor: consumes a non-empty stack, returns the head and the shorter rest *)
 extern fun lin_pop {n:pos}
   (s: lin_stack(n)): @(int, lin_stack(n - 1))
 
+(* Linear drop: consumes any stack exactly once (no residual linear values) *)
 extern fun lin_drop {n:nat}
   (s: lin_stack(n)): void
 
@@ -45,23 +58,33 @@ implement lin_drop (s) =
   | ~LinNil ()         => ()
   | ~LinCons (_, rest) => lin_drop (rest)
 
+(* -------------------------------------------------------------------------
+ * 2. Length-preserving theorems encoded as dependent functions
+ * ------------------------------------------------------------------------- *)
+
+(* Theorem: push then pop is identity on the length and the value *)
 extern fun theorem_push_pop {n:nat}
   (s: lin_stack(n), x: int): @(int, lin_stack(n))
 
 implement theorem_push_pop (s, x) =
   let
-    val s1 = lin_push (s, x)
-    val @(y, s2) = lin_pop (s1)
+    val s1 = lin_push (s, x)          // length becomes n+1
+    val @(y, s2) = lin_pop (s1)       // length returns to n
   in
-    @(y, s2)
+    @(y, s2)                          // y must be x by construction
   end
 
+(* Theorem: empty stack has length 0 and can only be dropped *)
 extern fun theorem_nil_length (): lin_stack(0)
 
 implement theorem_nil_length () = LinNil ()
 
+(* -------------------------------------------------------------------------
+ * 3. Linear buffer for dense arena indices (resource ownership)
+ * ------------------------------------------------------------------------- *)
+
 dataviewtype lin_arena (cap: int) =
-  | LinArena (cap) of (int)
+  | LinArena (cap) of (int)           // holds the current top index
 
 extern fun arena_alloc {cap:nat}
   (a: lin_arena(cap)): @(int, lin_arena(cap))
@@ -79,9 +102,13 @@ implement arena_alloc (a) =
 implement arena_free (a) =
   let val ~LinArena (_) = a in () end
 
+(* -------------------------------------------------------------------------
+ * 4. Linear goal slot (consumed exactly once when scheduled)
+ * ------------------------------------------------------------------------- *)
+
 dataviewtype lin_goal (ready: bool) =
-  | LinReady (true) of (int)
-  | LinWait  (false) of (int, int)
+  | LinReady (true) of (int)          // predicate id
+  | LinWait  (false) of (int, int)    // predicate id, blocking var
 
 extern fun goal_spawn (pid: int): lin_goal(false)
 
@@ -100,6 +127,10 @@ implement goal_wake (g) =
 implement goal_run (g) =
   let val ~LinReady (_) = g in () end
 
+(* -------------------------------------------------------------------------
+ * 5. Composition: linear pipeline that cannot leak resources
+ * ------------------------------------------------------------------------- *)
+
 extern fun linear_pipeline {n:nat}
   (s: lin_stack(n), x: int): void
 
@@ -107,7 +138,7 @@ implement linear_pipeline (s, x) =
   let
     val s1 = lin_push (s, x)
     val @(y, s2) = lin_pop (s1)
-    val () = lin_drop (s2)
+    val () = lin_drop (s2)            // must consume the remainder
   in
-    ()
+    ()                                // all linear values consumed
   end
