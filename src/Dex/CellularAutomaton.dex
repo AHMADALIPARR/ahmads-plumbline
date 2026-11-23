@@ -1,0 +1,35 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+-- Elementary cellular automata in Dex
+-- Rule: next state of cell i is f(left, center, right) under a Wolfram rule.
+
+def neighborhood (grid: n=>Bool) (i: Fin n) : (Bool, Bool, Bool) =
+  (grid[i-1], grid[i], grid[i+1])
+
+def wolframRule (rule: Nat) (left: Bool) (center: Bool) (right: Bool) : Bool =
+  let idx = (if left then 4 else 0) + (if center then 2 else 0) + (if right then 1 else 0)
+  in (rule .&. (1 << idx)) /= 0
+
+def stepCA (rule: Nat) (grid: n=>Bool) : n=>Bool =
+  for i. wolframRule rule (grid[i-1]) (grid[i]) (grid[i+1])
+
+def runCA (rule: Nat) (steps: Nat) (init: n=>Bool) : (steps+1)=>n=>Bool =
+  iterate steps (stepCA rule) init
+
+-- Rule 30 and Rule 90 examples
+def rule30 (grid: n=>Bool) : n=>Bool = stepCA 30 grid
+def rule90 (grid: n=>Bool) : n=>Bool = stepCA 90 grid
