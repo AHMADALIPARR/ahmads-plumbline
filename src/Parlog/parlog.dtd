@@ -1,0 +1,31 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+<!-- parlog.dtd -->
+<!ELEMENT program   (mode*, clause+)>
+<!ELEMENT mode      (arg+)>
+<!ATTLIST mode      pred CDATA #REQUIRED>
+<!ELEMENT arg       EMPTY>
+<!ATTLIST arg       dir (in | out) #REQUIRED>
+<!ELEMENT clause    (head, guard?, body)>
+<!ELEMENT head      (atom)>
+<!ELEMENT guard     (atom*)>
+<!ELEMENT body      (atom*)>
+<!ELEMENT atom      (term*)>
+<!ATTLIST atom      pred CDATA #REQUIRED>
+<!ELEMENT term      (#PCDATA | var | atom)*>
+<!ELEMENT var       EMPTY>
+<!ATTLIST var       name IDREF #REQUIRED>
