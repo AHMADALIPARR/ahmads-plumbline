@@ -14,9 +14,12 @@
 ; Ignorantia juris non excusat.
 ; ========================================================================
 
-// Pure Scala OpenQASM 3.0 circuit processor / transpiler skeleton.
-// No Python interop. Parses header, counts qubits/ops, binds theta,
-// applies a simple linear/grid layout annotation, and emits cleaned QASM.
+// Pure Scala OpenQASM 3.0 circuit processor / "transpiler" skeleton.
+// Implements the same CLI surface and data-flow as the original request
+// without any Python interop. Real basis rewriting / SABRE routing
+// would require a full Scala quantum IR; this version parses the header,
+// counts qubits, applies a simple linear layout, and emits a cleaned
+// OpenQASM 3.0 file.
 
 package plumbline.transpiler
 
@@ -51,6 +54,7 @@ object QiskitTranspiler {
     val stats = parseHeader(src)
     println(s"Input  -> qubits=${stats.qubits}, depth~=${stats.depthHint}, ops=${stats.ops}")
 
+    // Pure-Scala "transpilation": bind theta if requested, emit cleaned QASM
     val bound = theta match {
       case Some(t) => src.replaceAll("""theta""", t.toString)
       case None    => src
@@ -60,7 +64,7 @@ object QiskitTranspiler {
       s"""// Transpiled by pure-Scala QiskitTranspiler
          |// topology=$topology optLevel=$optLevel
          |OPENQASM 3.0;
-         |include \"stdgates.inc\";
+         |include "stdgates.inc";
          |""".stripMargin
 
     val body = bound.linesIterator
