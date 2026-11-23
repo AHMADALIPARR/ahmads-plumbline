@@ -5,7 +5,7 @@ Ahmads-Plumbline assembles a dense committed-choice parallel-logic runtime, a sy
 
 **Dual license.** SNAPKITTY OPAQUE SOURCE LICENSE v1.0 **or** GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
 
-See the local workspace README for the complete architectural reference with all 34 required sections, file inventory, theorems, and diagrams.
+The complete 34-section architectural reference (file inventory, theorems, diagrams, complexity bounds, and the ready-mask wave) is the local `README.md` (649 lines). This file is the public summary.
 
 ### Dense ready-mask wave
 
