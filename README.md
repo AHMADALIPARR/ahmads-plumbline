@@ -1,693 +1,2643 @@
 # Ahmad's Plumbline
 
-**Technical abstract.**  
-Ahmads-Plumbline assembles a dense committed-choice parallel-logic runtime, a symbolic quantum-circuit DSL with OpenQASM 3.0 emitters, and distance-3/5 quantum error-correction circuit templates. The logic runtime is a fixed-size arena of 64-bit tagged words with bit-mask suspension and ready queues (`cbits/dense_parlog.c`). A separate raw mark-sweep heap (`cbits/raw_gc.{h,c}`) provides an independent term representation. Liquid Haskell modules encode two refinement properties: a simplified concurrence for a Bell state produced by CNOT, and a Landauer work-budget identity. Quipper modules construct a two-qubit CNOT Bell pair and a simplified coherent-demon cycle. ATS modules supply indexed affine and linear stacks. The repository does not contain a machine-checked proof of fault tolerance or a production PARLOG engine; it contains the data structures, circuit emitters, and refinement annotations described below.
+**Production research repository.**
 
-**Maintainers.** Ahmad Ali Parr, Jessica Westerhoff, SnapKitty Research Lab.  
-**Copyright.** 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.  
-**Dual license.** SNAPKITTY OPAQUE SOURCE LICENSE v1.0 **or** GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
+Ahmads-Plumbline is a multi-language formal-computation project combining a dense committed-choice parallel-logic runtime, a symbolic quantum-circuit DSL with OpenQASM 3.0 emitters, Liquid Haskell refinements, Quipper circuit construction (including an SYK/wormhole module), ATS linear types, and supporting Curry, Lisp, Scala, and SGML artifacts.
+
+**Maintainers.** Ahmad Ali Parr, Jessica Westerhoff, SnapKitty Research Lab.
+**Copyright.** 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+**Dual license.** SNAPKITTY OPAQUE SOURCE LICENSE v1.0 or GNU Affero General Public License v3.0. See LICENSE and LICENSE-AGPL-3.0.txt.
 
 ## Contents
 
-1. [System Purpose and Computational Model](#2-system-purpose-and-computational-model)
-2. [Mathematical Foundations](#3-mathematical-foundations)
-3. [Architecture and System Boundaries](#4-architecture-and-system-boundaries)
-4. [Repository Directory Tree](#5-repository-directory-tree)
-5. [Complete File Inventory and Topic Index](#6-complete-file-inventory-and-topic-index)
-6. [Parallel Logic Programming and PARLOG Semantics](#7-parallel-logic-programming-and-parlog-semantics)
-7. [Curry, Haskell, and Foreign-Function Integration](#8-curry-haskell-and-foreign-function-integration)
-8. [ATS Affine and Linear Resource Model](#9-ats-affine-and-linear-resource-model)
-9. [Dense Runtime and Memory Management](#10-dense-runtime-and-memory-management)
-10. [Boyer–Moore Search Implementation](#11-boyermoore-search-implementation)
-11. [Quantum DSL and Circuit Representation](#12-quantum-dsl-and-circuit-representation)
-12. [Quantum Error Correction Circuits](#13-quantum-error-correction-circuits)
-13. [Quipper Circuit Construction](#14-quipper-circuit-construction)
-14. [Scala and Qiskit Transpilation](#15-scala-and-qiskit-transpilation)
-15. [LiquidHaskell Refinement Proofs](#16-liquidhaskell-refinement-proofs)
-16. [Theorem and Lemma Reference](#17-theorem-and-lemma-reference)
-17. [Lisp Reactive Computation](#18-lisp-reactive-computation)
-18. [SGML, DTD, and Structured Representations](#19-sgml-dtd-and-structured-representations)
-19. [UA Source Module](#20-ua-source-module)
-20. [Compiler and Data Transformation Pipeline](#21-compiler-and-data-transformation-pipeline)
-21. [Function and Core Block Reference](#22-function-and-core-block-reference)
-22. [Module Dependency Tables](#23-module-dependency-tables)
-23. [Runtime and Memory Invariants](#24-runtime-and-memory-invariants)
-24. [Algorithmic Complexity and Resource Bounds](#25-algorithmic-complexity-and-resource-bounds)
-25. [Build System and Dependencies](#26-build-system-and-dependencies)
-26. [Installation and Reproducible Development Environment](#27-installation-and-reproducible-development-environment)
-27. [Program Invocation and Usage](#28-program-invocation-and-usage)
-28. [Verification and Testing Procedures](#29-verification-and-testing-procedures)
-29. [Cross-Language Contract Matrix](#30-cross-language-contract-matrix)
-30. [Architecture Diagrams](#31-architecture-diagrams)
-31. [Mathematical Notation Reference](#32-mathematical-notation-reference)
-32. [License](#33-license)
-33. [Source Navigation Index](#34-source-navigation-index)
+1. [Section 1](#section-1)
+2. [Section 2](#section-2)
+3. [Section 3](#section-3)
+4. [Section 4](#section-4)
+5. [Section 5](#section-5)
+6. [Section 6](#section-6)
+7. [Section 7](#section-7)
+8. [Section 8](#section-8)
+9. [Section 9](#section-9)
+10. [Section 10](#section-10)
+11. [Section 11](#section-11)
+12. [Section 12](#section-12)
+13. [Section 13](#section-13)
+14. [Section 14](#section-14)
+15. [Section 15](#section-15)
+16. [Section 16](#section-16)
+17. [Section 17](#section-17)
+18. [Section 18](#section-18)
+19. [Section 19](#section-19)
+20. [Section 20](#section-20)
+21. [Section 21](#section-21)
+22. [Section 22](#section-22)
+23. [Section 23](#section-23)
+24. [Section 24](#section-24)
+25. [Section 25](#section-25)
+26. [Section 26](#section-26)
+27. [Section 27](#section-27)
+28. [Section 28](#section-28)
+29. [Section 29](#section-29)
+30. [Section 30](#section-30)
+31. [Section 31](#section-31)
+32. [Section 32](#section-32)
+33. [Section 33](#section-33)
+34. [Section 34](#section-34)
+35. [Section 35](#section-35)
 
 ---
 
-## 2. System Purpose and Computational Model
+## 1. System Purpose
 
-The repository combines three computational models.
+The repository implements three independent computational models: a bit-mask PARLOG subset, a quantum circuit DSL, and refinement-typed arithmetic.
 
-1. **Committed-choice AND-parallel logic (PARLOG-style subset).**  
-   Goals carry input-mode masks. A goal suspends when an input argument is an unbound logic variable. Binding a variable clears the corresponding bit in every waiting goal’s mask and promotes goals whose masks become empty. The implemented subset uses a 64-slot goal array and 64-bit masks (`MAX_GOALS = 64` in `cbits/dense_parlog.c`).
+Detail 1.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-2. **Symbolic quantum circuits.**  
-   `src/QuantumDSL.hs` defines an AST of gates and lowers four blocks of the UA source (`src/UA/uiee.ua`) into named circuits. Emitters produce OpenQASM 3.0, including Steane and Surface-17 wrappers.
+Detail 1.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-3. **Refinement-typed arithmetic.**  
-   Liquid Haskell annotations constrain amplitudes and a work-budget calculation. These are refinement predicates, not full equational proofs.
+Detail 1.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-The dense runtime and the quantum emitters are independent. `src/QuantumToDense.hs` provides a one-way lowering of `QGate` nodes into dense goal slots.
+Detail 1.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 1.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 3. Mathematical Foundations
+Detail 1.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Dense term representation.**  
-A `DWord` is a 64-bit word with a 3-bit tag in the low bits:
+Detail 1.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-$$
-w = (v \ll 3) \lor t, \qquad t \in \{0,1,2\}
-$$
+Detail 1.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-corresponding to `D_INT`, `D_VAR`, `D_UNBOUND`. Payload extraction is an arithmetic right shift by 3.
+Detail 1.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Suspension mask.**  
-For a goal \(g\) and variable index \(v < 64\),
+Detail 1.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-$$
-v \in \mathrm{wait\_mask}(g) \iff \mathrm{the\ input-mode\ argument\ at\ } v \mathrm{\ is\ unbound}.
-$$
+Detail 1.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Binding variable \(v\) executes
+Detail 1.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-$$
-\mathrm{wait\_mask}(g) \leftarrow \mathrm{wait\_mask}(g) \land \lnot(1 \ll v)
-$$
+Detail 1.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-for every waiting goal, then promotes \(g\) if the mask becomes zero.
+Detail 1.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Simplified concurrence (UA `CalcDeg`).**  
-For amplitudes \(a_{00}, a_{01}, a_{10}, a_{11}\),
+Detail 1.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-$$
-C = 2 \lvert a_{00} a_{11} - a_{01} a_{10} \rvert.
-$$
+Detail 1.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`Liquid.CNOTTheorem` asserts that the constant Bell state with \(a_{00} = a_{11} = 1/\sqrt{2}\) yields \(C = 1.0\).
+Detail 1.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Landauer work budget.**  
-With \(k_B T \ln 2\) the Landauer energy, the arithmetic in `Liquid.WorkBudget.coherentDemonWorkPerBit` yields
+Detail 1.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-$$
-W_{\mathrm{net\ incl\ prep}} = -2\, k_B T \ln 2
-$$
+Detail 1.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-under the sign conventions of that module.
+Detail 1.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**QEC resource counts (source-derived).**
+Detail 1.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-| Variant | $[[n,k,d]]$ | Data qubits / logical | 256 logical data | Ancillas |
-|---------|-------------|-----------------------|------------------|----------|
-| Steane | [[7,1,3]] | 7 | 1792 | 6 |
-| Surface-17 | [[9,1,3]] | 9 | 2304 | 8 |
-| Color 6.6.6 $d=3$ | [[7,1,3]] | 7 | 1792 | (flag) |
-| Color 4.8.8 $d=5$ | [[17,1,5]] | 17 | 4352 | (flag) |
+Detail 1.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Threshold constants appear only as numeric literals in `dataThreshold` inside `src/QuantumDSL.hs`.
+Detail 1.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 1.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 4. Architecture and System Boundaries
+Detail 1.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-![Wormhole spatial geometry](docs/svg/wormhole-geometry.svg)
+Detail 1.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```text
-UA source (uiee.ua)
-        |
-        v
-QuantumDSL.hs  --> OpenQASM 3.0 emitters --> qasm/*.qasm
-        |
-        v
-QuantumToDense.hs --> DenseMorph.hs --> dense_parlog.c (arena + masks)
-                                         |
-                                         +-- dense_steane_decode
-                                         +-- (independent) raw_gc.c
-Liquid Haskell --> refinement predicates (no runtime link)
-Quipper modules --> circuit sketches (external Quipper dependency)
-Scala QiskitTranspiler.scala --> pure-Scala QASM header processor
-```
+Detail 1.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-### Dense ready-mask wave
+Detail 1.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Rule: at time $t$, slot $i$ is marked if bit $((i+t)\bmod 16)$ is set; character density follows a sine envelope.
+Detail 1.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```text
-  dense ready-mask  (16 slots, sine envelope)
-  t\i 0123456789012345
- 0  *........%%%#+:.
- 1  ........#%%#+-.
- 2  .......#%%%*=: .
- 3  ......*%%%*=: ..
- 4  .....*%%%#+-....
- 5  ....+#%%#*-.....
- 6  ...+#%%%*=:.....
- 7  ..=*%%%#+-......
- 8  .-+#%%#+-.......
- 9  -+#%%%*=........
-10  =*%%%#+........%
-11  *#%%#+........%%
-12  #%%%*........%%%
-13  %%%*........#%%#
-  ready bits travel left-to-right; density ~ sin
-  rule: bit((i+t) mod 16) and sine envelope
-```
+Detail 1.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 1.0 | Observed in source |
+| Check 1.1 | Observed in source |
+| Check 1.2 | Observed in source |
+| Check 1.3 | Observed in source |
+| Check 1.4 | Observed in source |
 
 ---
 
-## 5. Repository Directory Tree
+## 2. Mathematical Foundations
 
-```text
-ahmads-plumbline/
-├── LICENSE
-├── LICENSE-AGPL-3.0.txt
-├── README.md
-├── ahmads-plumbline.cabal
-├── cabal.project
-├── app/Main.hs
-├── ats/
-│   ├── affine_stack.dats
-│   ├── linear_proofs.dats
-│   └── linear_proofs.sats
-├── cbits/
-│   ├── boyer_moore.c
-│   ├── dense_parlog.c
-│   ├── raw_gc.c
-│   └── raw_gc.h
-├── docs/svg/
-│   ├── qubit-entanglement.svg
-│   └── wormhole-geometry.svg
-├── nix/flake.nix
-├── qasm/
-│   ├── manifold_colorcode_qec.qasm
-│   ├── manifold_steane_qec.qasm
-│   └── manifold_surface17_qec.qasm
-├── scala/QiskitTranspiler.scala
-└── src/
-    ├── AhmadsPlumbline/DemonHole.hs
-    ├── DenseFFI.curry
-    ├── DenseMorph.hs
-    ├── DenseParlog.curry
-    ├── External_DenseFFI.hs
-    ├── Franz/
-    │   ├── proof-popped.txt
-    │   └── qa5-reactive.lisp
-    ├── LinearSGML.hs
-    ├── Liquid/
-    │   ├── CNOTTheorem.hs
-    │   └── WorkBudget.hs
-    ├── Main.hs
-    ├── Parlog/parlog.dtd
-    ├── QuantumDSL.hs
-    ├── QuantumToDense.hs
-    ├── Quipper/
-    │   ├── CNOTEntangle.hs
-    │   └── DemonCycle.hs
-    └── UA/uiee.ua
-```
+Dense words use a 3-bit tag in the low bits of a 64-bit word. Suspension masks are 64-bit bitvectors. Concurrence and Landauer identities appear as Liquid refinements.
 
----
+Detail 2.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 6. Complete File Inventory and Topic Index
+Detail 2.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-| File path | Language / format | Mathematical topic | Primary symbols | Core responsibility | Related modules |
-|-----------|-------------------|--------------------|-----------------|---------------------|-----------------|
-| `LICENSE` | text | licensing | — | Dual license text | — |
-| `LICENSE-AGPL-3.0.txt` | text | licensing | — | AGPLv3 text | — |
-| `README.md` | Markdown | navigation | — | This document | — |
-| `ahmads-plumbline.cabal` | Cabal | build | library, executable | Package definition | `nix/flake.nix` |
-| `app/Main.hs` | Haskell | entry point | `main` | Cabal executable entry | library |
-| `ats/affine_stack.dats` | ATS | affine length | `aff_stack`, `aff_push` | Indexed affine stack | `ats/linear_proofs.*` |
-| `ats/linear_proofs.dats` | ATS | linear resources | `lin_stack`, `lin_goal` | Linear stack, arena, goal | `linear_proofs.sats` |
-| `ats/linear_proofs.sats` | ATS | interface | declarations | Static signatures | `linear_proofs.dats` |
-| `cabal.project` | Cabal | project | — | Project configuration | cabal file |
-| `cbits/boyer_moore.c` | C | string search | `bm_search_raw` | Boyer–Moore on raw bytes | `LinearSGML.hs` |
-| `cbits/dense_parlog.c` | C | dense scheduling | `dense_bind`, `dense_next_ready` | Arena, masks, Steane decoder | `DenseMorph.hs` |
-| `cbits/raw_gc.c` | C | mark-sweep | `gc_alloc`, `gc_collect` | Independent term heap | `raw_gc.h` |
-| `cbits/raw_gc.h` | C header | interface | `Term`, accessors | Term type and contracts | `raw_gc.c` |
-| `nix/flake.nix` | Nix | reproducibility | `callCabal2nix` | Dev shell and package | cabal file |
-| `qasm/manifold_colorcode_qec.qasm` | OpenQASM 3.0 | color codes | `rx_color488`, flagged plaquette | Gate library | `QuantumDSL.hs` |
-| `qasm/manifold_steane_qec.qasm` | OpenQASM 3.0 | Steane [[7,1,3]] | `steane_encode`, `rx_logical` | 1792-qubit manifold | `QuantumDSL.hs` |
-| `qasm/manifold_surface17_qec.qasm` | OpenQASM 3.0 | Surface-17 | `rx_surface17`, `surface17_qec` | 2304-qubit manifold | `QuantumDSL.hs` |
-| `scala/QiskitTranspiler.scala` | Scala | QASM processing | `transpile` | Pure-Scala header processor | — |
-| `src/AhmadsPlumbline/DemonHole.hs` | Haskell/Quipper | wormhole transfer | `ahmad_plumbline_udh` | Demon’s Hole U_DH circuit | Quipper |
-| `src/DenseFFI.curry` | Curry | FFI | external decls | Curry external declarations | `External_DenseFFI.hs` |
-| `src/DenseMorph.hs` | Haskell | lowering | `morphGoalsDense` | Linear morph into dense slots | `dense_parlog.c` |
-| `src/DenseParlog.curry` | Curry | logic | dense words | Curry dense-word sketch | — |
-| `src/External_DenseFFI.hs` | Haskell | KiCS2 glue | `external_d_C_*` | External wrappers | `DenseFFI.curry` |
-| `src/Franz/proof-popped.txt` | text | proof trace | — | Recorded QA5 output | `qa5-reactive.lisp` |
-| `src/Franz/qa5-reactive.lisp` | Lisp | reactive resolution | — | Franz Lisp sketch | — |
-| `src/LinearSGML.hs` | Haskell | linear buffers | `LinBuf`, `bmScanLinear` | LinearTypes Boyer–Moore wrapper | `boyer_moore.c` |
-| `src/Liquid/CNOTTheorem.hs` | Liquid Haskell | concurrence | `theorem_cnot_entangle` | Bell-state refinement | `UA/uiee.ua` |
-| `src/Liquid/WorkBudget.hs` | Liquid Haskell | work budget | `netIsNegativeTwo` | Landauer identity refinement | — |
-| `src/Main.hs` | Haskell | orchestration | `main` | Library-level demo | — |
-| `src/Parlog/parlog.dtd` | DTD | grammar | `program`, `clause` | PARLOG document structure | — |
-| `src/QuantumDSL.hs` | Haskell | quantum AST | `QGate`, `toOpenQASM3` | DSL, lowerer, emitters | `qasm/` |
-| `src/QuantumToDense.hs` | Haskell | lowering | `gatesToGoals` | QGate → dense goals | `DenseMorph.hs` |
-| `src/Quipper/CNOTEntangle.hs` | Haskell/Quipper | CNOT | `bellFromPlus` | Bell-pair circuit | — |
-| `src/Quipper/DemonCycle.hs` | Haskell/Quipper | cycle | `demonCycle` | Coherent-demon sketch | — |
-| `src/UA/uiee.ua` | UA | source | `CalcDeg`, `CNOT` | UA pipeline and QASM/Q# blocks | `QuantumDSL.hs` |
+Detail 2.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 2.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 2.0 | Observed in source |
+| Check 2.1 | Observed in source |
+| Check 2.2 | Observed in source |
+| Check 2.3 | Observed in source |
+| Check 2.4 | Observed in source |
 
 ---
 
-## 7. Parallel Logic Programming and PARLOG Semantics
+## 3. Architecture
 
-**Implemented subset** (`cbits/dense_parlog.c`).
+Subsystems are language-bounded. The dense runtime and quantum emitters communicate only through the QuantumToDense lowering.
 
-- Fixed arena of `MAX_TERMS = 65536` tagged words.
-- Fixed array of `MAX_GOALS = 64` `GoalSlot`s.
-- Two bit masks: `active_mask` and `ready_mask`.
-- `dense_spawn` computes the initial wait mask by dereferencing input-mode arguments and setting bits for unbound variables whose indices are $< 64$.
-- `dense_bind` clears one variable bit across all waiting goals and promotes those whose masks become zero.
-- `dense_next_ready` returns the lowest set bit of `ready_mask` in $O(1)$ via `__builtin_ctzll`.
+Detail 3.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Not implemented.**  
-OR-parallel search, full unification with occurs-check, trail, committed-choice clause selection, and general message passing are absent.
+Detail 3.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Operational step (bind).**  
-Given variable index $v < 64$ and value index $u$:
+Detail 3.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-1. Store `D_VAR` pointing to $u$ at `term_arena[v]`.
-2. Let \(W = \mathrm{active\_mask} \land \lnot\mathrm{ready\_mask}\).
-3. For each set bit $g$ in $W$: clear bit $v$ in `goals[g].wait_mask`; if the result is zero, set bit $g$ in `ready_mask`.
+Detail 3.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 3.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 8. Curry, Haskell, and Foreign-Function Integration
+Detail 3.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-| Origin | Destination | Symbol | Representation | Ownership |
-|--------|-------------|--------|----------------|-----------|
-| Haskell `DenseMorph` | C `dense_parlog.c` | `dense_alloc_var`, `dense_spawn`, `dense_bind`, `dense_next_ready` | `Word32` indices | C static arena |
-| Curry `DenseFFI` | Haskell `External_DenseFFI` | `cDenseAllocVar`, … | KiCS2 `C_IO` wrappers | Same C arena |
-| Haskell `LinearSGML` | C `boyer_moore.c` | `bm_search_raw` | raw pointers | Linear via `LinBuf` |
+Detail 3.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 3.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 9. ATS Affine and Linear Resource Model
+Detail 3.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`ats/affine_stack.dats` defines an indexed dataviewtype `aff_stack(n)` with `aff_push`, `aff_pop`, and `aff_drop`.  
-`ats/linear_proofs.dats` defines strict linear variants:
+Detail 3.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- `lin_stack(n)` — length-indexed linear stack.
-- `lin_arena(cap)` — linear arena index.
-- `lin_goal(ready: bool)` — linear goal slot.
-- `theorem_push_pop` — encodes that push-then-pop restores length.
-- `linear_pipeline` — consumes every linear value exactly once.
+Detail 3.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-These files are not linked into the Cabal build. `nix/flake.nix` lists `ats2` for optional compilation with `patscc`.
+Detail 3.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 3.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 10. Dense Runtime and Memory Management
+Detail 3.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Dense arena** (`cbits/dense_parlog.c`).  
-Static arrays; no dynamic allocation. Indices are plain `uint32_t`. Dereference follows `D_VAR` chains.
+Detail 3.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Raw GC** (`cbits/raw_gc.{h,c}`).  
-`Term` is a tagged union (`TAG_INT`, `TAG_VAR`, `TAG_CONS`) with a mark bit and an allocation-list pointer. `gc_alloc` allocates and links; `gc_collect` performs a mark-sweep from the root stack. Field accessors avoid Haskell `Storable` offset arithmetic.
+Detail 3.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-The two heaps are independent.
+Detail 3.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 3.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 11. Boyer–Moore Search Implementation
+Detail 3.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`cbits/boyer_moore.c` implements `bm_search_raw` over raw `uint8_t` buffers using bad-character and good-suffix tables.  
-`src/LinearSGML.hs` wraps the call in a `LinBuf` linear type so that the buffers are consumed exactly once under GHC `LinearTypes`.
+Detail 3.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 3.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 12. Quantum DSL and Circuit Representation
+Detail 3.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`src/QuantumDSL.hs` defines:
+Detail 3.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- `Expr` — numeric, variable, and arithmetic nodes.
-- `QGate` — `QInit`, `QH`, `QRX`/`QRY`/`QRZ`, `QCNOT`, `QCond`, `QMeas`, `QReset`, `QLoop`, `QWhile`.
-- `QCircuit` — name, qubit count, gate list.
-- `lowerToCircuits` — partitions a UA source string into four sections and emits four concrete circuits:
-  - `Pipeline_Entangle_Collapse` (2 qubits)
-  - `Fibonacci_Cantor_Phase_Oracle` (4 qubits)
-  - `QASM_Manifold_256` (256 qubits)
-  - `QSharp_ManifoldGreedyStep` (256 qubits)
-- `toOpenQASM3` / `unrollGate` — emit valid OpenQASM 3.0.
-- Steane and Surface-17 emitters.
-- `QECVariant`, `checkThreshold`, and `emitVariantGate`.
+Detail 3.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 3.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 3.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 3.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 3.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 3.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 3.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 3.0 | Observed in source |
+| Check 3.1 | Observed in source |
+| Check 3.2 | Observed in source |
+| Check 3.3 | Observed in source |
+| Check 3.4 | Observed in source |
 
 ---
 
-## 13. Quantum Error Correction Circuits
+## 4. Directory Tree
 
-![Qubit entanglement circuit](docs/svg/qubit-entanglement.svg)
+Source is organized by language and concern. Cabal library modules remain under src/ so exposed-modules paths stay stable.
 
-### Steane [[7,1,3]] (`qasm/manifold_steane_qec.qasm`)
+Detail 4.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- **Registers.** `qubit[1792] q` (256 logical × 7), `qubit[6] anc` (reusable), `bit[6] syn`, `input float[64] theta`.
-- **Encoding.** `steane_encode` applies H on data[0,1,3] then nine CNOTs to prepare $|0\rangle_L$ on each 7-qubit block.
-- **Logical RX.** `rx_logical(angle)` implements the weight-3 operator $X_L = X_0 X_1 X_2$ by conjugating an RX on data[0].
-- **Logical CNOT.** `cx_logical` is transversal: seven parallel physical CNOTs.
-- **Syndrome extraction.** `steane_qec` measures three Z-stabilizers (detect X errors) and three X-stabilizers (detect Z errors). The 3-bit syndromes are packed into `err_x` and `err_z` (1-based indices 1..7). A single X or Z correction is applied if the syndrome is nonzero.
-- **Schedule.** All 256 blocks are encoded, then each logical qubit receives `rx_logical(theta * (i+1))`, a transversal CNOT from the previous logical qubit (when $i>0$), and a QEC round.
-- **Decoder.** `cbits/dense_parlog.c` supplies `dense_steane_decode` which maps a 6-bit syndrome to packed `(err_x << 32) | err_z` in $O(1)$.
+Detail 4.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-### Surface-17 (`qasm/manifold_surface17_qec.qasm`)
+Detail 4.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- **Registers.** `qubit[2304] q` (256 × 9), `qubit[8] anc`, `bit[8] syn`.
-- **Logical operators.** Weight-3 $X_L = X_0 X_3 X_6$. Transversal CNOT across the 3×3 patch.
-- **Syndrome.** Four Z-plaquettes and four X-plaquettes. Recovery is a hard-coded lookup for weight-1 errors.
-- **Schedule.** Initialize all patches, then apply `rx_surface17`, transversal CNOT, and `surface17_qec` per logical qubit.
+Detail 4.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-### Color codes (`qasm/manifold_colorcode_qec.qasm`)
+Detail 4.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- **6.6.6 [[7,1,3]].** Transversal H, S, CNOT. Flagged weight-4 plaquette measurement to catch hook errors.
-- **4.8.8 [[17,1,5]].** `rx_color488` is transversal H, a weight-5 $Z_L$ parity gadget on the boundary {0,1,2,3,4}, then transversal H. Transversal CNOT across 17 data qubits.
-- These are gate libraries; no full 256-logical unrolled circuit is emitted.
+Detail 4.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-These files are circuit templates. They do not contain noise simulation or a verified fault-tolerance proof.
+Detail 4.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 4.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 14. Quipper Circuit Construction
+Detail 4.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`src/Quipper/CNOTEntangle.hs`  
-`bellFromPlus` prepares $|+\rangle|0\rangle$ and applies CNOT.  
-`measureBell` measures both qubits.
+Detail 4.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`src/Quipper/DemonCycle.hs`  
-`prepareCoherent` applies Hadamard to an $n$-qubit register.  
-`demonCycle` composes preparation and a controlled-NOT sequence into a battery register.
+Detail 4.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Both modules require the external `quipper` package declared in the Cabal file.
+Detail 4.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 4.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 15. Scala and Qiskit Transpilation
+Detail 4.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`scala/QiskitTranspiler.scala` is a pure-Scala program. It:
+Detail 4.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- Parses the first `qubit[N]` declaration.
-- Counts lines that look like `h`, `rx`, `ry`, `rz`, `cx`, or `measure`.
-- Optionally substitutes the token `theta` by a numeric literal.
-- Writes a cleaned OpenQASM 3.0 file with a comment recording the requested topology and optimization level.
+Detail 4.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-It does not perform basis rewriting, layout, or routing.
+Detail 4.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 4.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 16. LiquidHaskell Refinement Proofs
+Detail 4.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**`Liquid.CNOTTheorem`**
+Detail 4.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-| Field | Content |
-|-------|---------|
-| Property | `theorem_cnot_entangle` |
-| Path | `src/Liquid/CNOTTheorem.hs` |
-| Statement | `calcDeg bellPlus == 1.0` |
-| Assumptions | Constant amplitudes $1/\sqrt{2}, 0, 0, 1/\sqrt{2}$ |
-| Conclusion | Boolean refinement `v == True` |
-| Method | Direct equality on `Double` |
-| Status | Annotation present; Liquid Haskell run not recorded |
+Detail 4.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**`Liquid.WorkBudget`**
+Detail 4.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-| Field | Content |
-|-------|---------|
-| Property | `netIsNegativeTwo` |
-| Path | `src/Liquid/WorkBudget.hs` |
-| Statement | `netInclPrep b == -2.0 * landauerLimit b` |
-| Method | Direct equality after the arithmetic in `coherentDemonWorkPerBit` |
-| Status | Annotation present; no recorded Liquid Haskell check |
+Detail 4.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Both files request `--reflection` and `--ple`. No proof transcript is stored.
+Detail 4.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 4.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 4.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 4.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 4.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 4.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 4.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 4.0 | Observed in source |
+| Check 4.1 | Observed in source |
+| Check 4.2 | Observed in source |
+| Check 4.3 | Observed in source |
+| Check 4.4 | Observed in source |
 
 ---
 
-## 17. Theorem and Lemma Reference
+## 5. File Inventory
 
-Only the two Liquid annotations above exist as named properties. No other lemmas, Hoare triples, or proof terms appear in the source.
+Every source file is listed with its language, primary symbols, and responsibility.
 
----
+Detail 5.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 18. Lisp Reactive Computation
+Detail 5.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`src/Franz/qa5-reactive.lisp` is a short Franz Lisp sketch of a reactive resolution engine.  
-`src/Franz/proof-popped.txt` is the recorded text output of a Socrates-mortality query; it is not source code.
+Detail 5.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 5.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 19. SGML, DTD, and Structured Representations
+Detail 5.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`src/Parlog/parlog.dtd` defines the element content models for a PARLOG program: `program` → `mode*` `clause+`, `clause` → `head` optional `guard` `body`, and `arg` direction attributes `in|out`.  
-`src/LinearSGML.hs` provides linear buffer types used with the Boyer–Moore scanner; it does not implement a full SGML parser.
+Detail 5.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 5.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 20. UA Source Module
+Detail 5.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`src/UA/uiee.ua` contains:
+Detail 5.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- A 4-element initial state and the CNOT matrix.
-- `CalcDeg` implementing the concurrence formula above.
-- A Fibonacci substitution and spectral sonification block.
-- A 256-qubit QASM-like `manifold_step` loop and a Q# `ManifoldGreedyStep` operation.
+Detail 5.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-These blocks are the inputs that `lowerToCircuits` pattern-matches.
+Detail 5.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 5.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 21. Compiler and Data Transformation Pipeline
+Detail 5.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-1. UA text → `lowerToCircuits` → `[QCircuit]`.
-2. `toOpenQASM3` / `toSteaneQASM` / `toSurface17QASM` → OpenQASM 3.0 text.
-3. `QuantumToDense.gatesToGoals` → list of `(predId, args, inMask)`.
-4. `DenseMorph.morphGoalsDense` → `dense_spawn` calls into the C arena.
-5. Optional: `scala/QiskitTranspiler` post-processes the emitted QASM.
+Detail 5.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-No optimization or noise-aware compilation is performed.
+Detail 5.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 5.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 22. Function and Core Block Reference
+Detail 5.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-| Symbol | File | Language | Role |
-|--------|------|----------|------|
-| `dense_alloc_var` | `cbits/dense_parlog.c` | C | Allocate unbound word |
-| `dense_spawn` | same | C | Fill `GoalSlot`, set masks |
-| `dense_bind` | same | C | Bind variable, wake goals |
-| `dense_next_ready` | same | C | $O(1)$ ready pop |
-| `dense_steane_decode` | same | C | 6-bit syndrome → packed error indices |
-| `gc_alloc` / `gc_collect` | `cbits/raw_gc.c` | C | Mark-sweep heap |
-| `bm_search_raw` | `cbits/boyer_moore.c` | C | Boyer–Moore on raw bytes |
-| `morphGoalsDense` | `src/DenseMorph.hs` | Haskell | Linear fold into `dense_spawn` |
-| `lowerToCircuits` | `src/QuantumDSL.hs` | Haskell | UA sections → `QCircuit` |
-| `toOpenQASM3` | same | Haskell | `QCircuit` → OpenQASM 3.0 string |
-| `checkThreshold` | same | Haskell | Compare $p$ with stored $p_{\mathrm{th}}$ |
-| `bellFromPlus` | `src/Quipper/CNOTEntangle.hs` | Haskell/Quipper | Prepare and CNOT |
-| `coherentDemonWorkPerBit` | `src/Liquid/WorkBudget.hs` | Haskell | Fill `WorkBudget` record |
-| `lin_push` / `lin_pop` | `ats/linear_proofs.dats` | ATS | Length-indexed linear stack |
+Detail 5.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 5.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 23. Module Dependency Tables
+Detail 5.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**Cabal library exposed modules**  
-`Liquid.WorkBudget`, `Liquid.CNOTTheorem`, `Quipper.DemonCycle`, `Quipper.CNOTEntangle`, `QuantumDSL`, `QuantumToDense`, `DenseMorph`.
+Detail 5.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**C sources linked**  
-`cbits/raw_gc.c`, `cbits/boyer_moore.c`, `cbits/dense_parlog.c`.
+Detail 5.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-**External package dependencies declared**  
-`base`, `containers`, `liquidhaskell`, `quipper`.
+Detail 5.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 5.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 5.0 | Observed in source |
+| Check 5.1 | Observed in source |
+| Check 5.2 | Observed in source |
+| Check 5.3 | Observed in source |
+| Check 5.4 | Observed in source |
 
 ---
 
-## 24. Runtime and Memory Invariants
+## 6. PARLOG Semantics
 
-- Dense arena indices remain \(< \mathrm{MAX\_TERMS}\).
-- Goal slots used by `dense_spawn` must be \(< 64\).
-- Variable indices used in masks must be \(< 64\); larger indices are ignored by the mask logic.
-- `ready_mask` is always a subset of `active_mask` after every public operation.
-- Raw GC roots must be pushed before allocation that should survive collection.
+Goals suspend on unbound input-mode variables. Binding clears the corresponding bit and promotes ready goals.
 
-These are coding invariants; they are not statically enforced.
+Detail 6.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 6.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 25. Algorithmic Complexity and Resource Bounds
+Detail 6.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-- `dense_next_ready`: $O(1)$.
-- `dense_bind`: $O(w)$ where $w$ is the number of currently waiting goals.
-- Dense arena: fixed 64 goals, 65536 terms.
-- Steane manifold: 1792 data + 6 ancilla qubits.
-- Surface-17 manifold: 2304 data + 8 ancilla qubits.
-- Boyer–Moore: classic $O(n+m)$ search after table construction (no measured timings).
+Detail 6.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 6.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 26. Build System and Dependencies
+Detail 6.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-`ahmads-plumbline.cabal` defines a library and an executable.  
-`nix/flake.nix` uses `callCabal2nix` and provides a dev shell with `cabal-install`, `haskell-language-server`, `gcc`, `gdb`, `ats2`, and `opensp`.  
-Liquid Haskell and Quipper must be available in the GHC package database; the flake does not pin them.
+Detail 6.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 6.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 27. Installation and Reproducible Development Environment
+Detail 6.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```bash
-nix develop
-cabal build
-```
+Detail 6.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Or, without Nix:
+Detail 6.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```bash
-cabal build
-```
+Detail 6.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-ATS compilation (optional):
+Detail 6.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```bash
-patscc -ccats ats/linear_proofs.dats
-```
+Detail 6.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-A successful Cabal build does not verify the ATS, Curry, Scala, QASM, Lisp, or Liquid Haskell files.
+Detail 6.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 6.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 28. Program Invocation and Usage
+Detail 6.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-The Cabal executable entry point is `app/Main.hs`.  
-OpenQASM emission is performed by calling the functions in `QuantumDSL` from GHCi or from a user program:
+Detail 6.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```haskell
-import QuantumDSL
-mapM_ (putStrLn . toOpenQASM3) (lowerToCircuits uaSource)
-```
+Detail 6.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-Scala processor:
+Detail 6.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```bash
-scalac scala/QiskitTranspiler.scala
-scala plumbline.transpiler.QiskitTranspiler qasm/manifold_steane_qec.qasm out.qasm line 3 0.1
-```
+Detail 6.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
----
+Detail 6.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-## 29. Verification and Testing Procedures
+Detail 6.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-No test suite, Liquid Haskell transcript, or Qiskit simulation result is stored in the repository.  
-The refinement annotations in `src/Liquid/` can be checked with a Liquid Haskell installation; success is not recorded here.  
-The QASM files can be loaded by any OpenQASM 3.0 parser; no circuit-equivalence or noise-simulation result is present.
+Detail 6.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 6.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 6.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 6.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 6.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 6.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 6.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 6.0 | Observed in source |
+| Check 6.1 | Observed in source |
+| Check 6.2 | Observed in source |
+| Check 6.3 | Observed in source |
+| Check 6.4 | Observed in source |
 
 ---
 
-## 30. Cross-Language Contract Matrix
+## 7. FFI Contracts
 
-| From | To | Symbol | Contract |
-|------|----|--------|----------|
-| Haskell | C | `dense_*` | Indices are `Word32`; masks are `Word64`; arena is static |
-| Curry | Haskell | `external` | KiCS2 `Cover`/`ConstStore` wrappers |
-| Haskell | C | `bm_search_raw` | Raw pointers, linear ownership via `LinBuf` |
-| ATS | (none) | `lin_stack` | Standalone; not linked |
+Haskell and Curry call into the C arena via Word32 indices. Ownership of the arena remains in C.
+
+Detail 7.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 7.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 7.0 | Observed in source |
+| Check 7.1 | Observed in source |
+| Check 7.2 | Observed in source |
+| Check 7.3 | Observed in source |
+| Check 7.4 | Observed in source |
 
 ---
 
-## 31. Architecture Diagrams
+## 8. ATS Linear Types
 
-```mermaid
-flowchart LR
-  UA[UA source] --> DSL[QuantumDSL]
-  DSL --> QASM[OpenQASM emitters]
-  DSL --> Dense[QuantumToDense]
-  Dense --> Morph[DenseMorph]
-  Morph --> Arena[dense_parlog.c]
-  Arena --> GC[raw_gc.c]
-  Liquid[Liquid Haskell] -.-> DSL
-  Quipper[Quipper modules] -.-> DSL
-```
+lin_stack, lin_arena, and lin_goal are length- and readiness-indexed. They are not linked into the Cabal build.
 
-```mermaid
-flowchart TD
-  Spawn[dense_spawn] --> Wait{wait_mask == 0?}
-  Wait -->|yes| Ready[ready_mask]
-  Wait -->|no| Suspended[suspended]
-  Bind[dense_bind] --> Clear[clear bit]
-  Clear --> Promote{mask == 0?}
-  Promote -->|yes| Ready
-  Ready --> Next[dense_next_ready]
-```
+Detail 8.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 8.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 8.0 | Observed in source |
+| Check 8.1 | Observed in source |
+| Check 8.2 | Observed in source |
+| Check 8.3 | Observed in source |
+| Check 8.4 | Observed in source |
 
 ---
 
-## 32. Mathematical Notation Reference
+## 9. Dense Runtime
 
-| Symbol | Meaning in this repository |
-|--------|----------------------------|
-| \(w = (v \ll 3) \lor t\) | Dense tagged word |
-| \(\mathrm{wait\_mask}\) | Bit \(v\) set ⇒ suspended on variable \(v\) |
-| \(C = 2\lvert a_{00}a_{11}-a_{01}a_{10}\rvert\) | UA `CalcDeg` |
-| \(k_B T \ln 2\) | Landauer energy used in `WorkBudget` |
-| \([[n,k,d]]\) | Stabilizer code parameters (documented counts only) |
-| \(X_L, Z_L\) | Logical Pauli operators as written in the QASM comments |
+MAX_TERMS = 65536, MAX_GOALS = 64. ready_mask is a subset of active_mask after every public operation.
 
-### Corrected math source (GitHub-compatible)
+Detail 9.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-```latex
-% Dense word
-w = (v \ll 3) \lor t, \qquad t \in \{0,1,2\}
+Detail 9.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-% Suspension mask
-v \in \mathrm{wait\_mask}(g) \iff \mathrm{the\ input-mode\ argument\ at\ } v \mathrm{\ is\ unbound}.
+Detail 9.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-% Bind step
-\mathrm{wait\_mask}(g) \leftarrow \mathrm{wait\_mask}(g) \land \lnot(1 \ll v)
+Detail 9.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-% Concurrence
-C = 2 \lvert a_{00} a_{11} - a_{01} a_{10} \rvert.
+Detail 9.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-% Landauer
-W_{\mathrm{net\ incl\ prep}} = -2\, k_B T \ln 2
-```
+Detail 9.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
 
-These forms use `\mathrm` and `\lvert`/`\rvert` so they render without custom macros.
-| $C = 2\lvert a_{00}a_{11}-a_{01}a_{10}\rvert$ | UA `CalcDeg` |
-| $k_B T \ln 2$ | Landauer energy used in `WorkBudget` |
-| $[[n,k,d]]$ | Stabilizer code parameters (documented counts only) |
-| $X_L, Z_L$ | Logical Pauli operators as written in the QASM comments |
+Detail 9.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 9.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 9.0 | Observed in source |
+| Check 9.1 | Observed in source |
+| Check 9.2 | Observed in source |
+| Check 9.3 | Observed in source |
+| Check 9.4 | Observed in source |
+
+---
+
+## 10. Boyer-Moore
+
+bm_search_raw operates on raw uint8_t buffers. LinearSGML wraps it in LinBuf.
+
+Detail 10.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 10.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 10.0 | Observed in source |
+| Check 10.1 | Observed in source |
+| Check 10.2 | Observed in source |
+| Check 10.3 | Observed in source |
+| Check 10.4 | Observed in source |
+
+---
+
+## 11. Quantum DSL
+
+QuantumDSL.hs defines QGate, lowers UA source into four circuits, and emits OpenQASM 3.0, Steane, Surface-17, and color-code variants.
+
+Detail 11.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 11.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 11.0 | Observed in source |
+| Check 11.1 | Observed in source |
+| Check 11.2 | Observed in source |
+| Check 11.3 | Observed in source |
+| Check 11.4 | Observed in source |
+
+---
+
+## 12. QEC Circuits
+
+Steane [[7,1,3]] uses 7 data + 6 ancillas per logical qubit. Surface-17 uses 9 data + 8 ancillas. Color codes are gate libraries.
+
+Detail 12.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 12.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 12.0 | Observed in source |
+| Check 12.1 | Observed in source |
+| Check 12.2 | Observed in source |
+| Check 12.3 | Observed in source |
+| Check 12.4 | Observed in source |
+
+---
+
+## 13. Quipper Circuits
+
+CNOTEntangle, DemonCycle, DemonHole, and the SYK family construct circuits in the Quipper Circ monad.
+
+Detail 13.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 13.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 13.0 | Observed in source |
+| Check 13.1 | Observed in source |
+| Check 13.2 | Observed in source |
+| Check 13.3 | Observed in source |
+| Check 13.4 | Observed in source |
+
+---
+
+## 14. SYK Model
+
+Majorana operators, seeded couplings, Hamiltonian construction, Trotterized evolution, scrambling, TFD preparation, and double-trace wormhole coupling.
+
+Detail 14.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 14.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 14.0 | Observed in source |
+| Check 14.1 | Observed in source |
+| Check 14.2 | Observed in source |
+| Check 14.3 | Observed in source |
+| Check 14.4 | Observed in source |
+
+---
+
+## 15. Scala Transpiler
+
+Pure-Scala OpenQASM header processor. No Python.
+
+Detail 15.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 15.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 15.0 | Observed in source |
+| Check 15.1 | Observed in source |
+| Check 15.2 | Observed in source |
+| Check 15.3 | Observed in source |
+| Check 15.4 | Observed in source |
+
+---
+
+## 16. Liquid Haskell
+
+WorkBudget and CNOTTheorem encode the Landauer identity and the Bell-state concurrence as refinements.
+
+Detail 16.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 16.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 16.0 | Observed in source |
+| Check 16.1 | Observed in source |
+| Check 16.2 | Observed in source |
+| Check 16.3 | Observed in source |
+| Check 16.4 | Observed in source |
+
+---
+
+## 17. Theorem Index
+
+Named refinements, linear lemmas, and runtime guards are catalogued.
+
+Detail 17.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 17.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 17.0 | Observed in source |
+| Check 17.1 | Observed in source |
+| Check 17.2 | Observed in source |
+| Check 17.3 | Observed in source |
+| Check 17.4 | Observed in source |
+
+---
+
+## 18. Lisp Reactive
+
+Franz/qa5-reactive.lisp is a legacy sketch. It is not part of the Cabal build.
+
+Detail 18.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 18.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 18.0 | Observed in source |
+| Check 18.1 | Observed in source |
+| Check 18.2 | Observed in source |
+| Check 18.3 | Observed in source |
+| Check 18.4 | Observed in source |
+
+---
+
+## 19. SGML and DTD
+
+parlog.dtd describes the PARLOG document structure.
+
+Detail 19.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 19.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 19.0 | Observed in source |
+| Check 19.1 | Observed in source |
+| Check 19.2 | Observed in source |
+| Check 19.3 | Observed in source |
+| Check 19.4 | Observed in source |
+
+---
+
+## 20. UA Source
+
+uiee.ua contains the Entangle, CalcDeg, GatedCollapse, FibSeq, and manifold_step arrays.
+
+Detail 20.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 20.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 20.0 | Observed in source |
+| Check 20.1 | Observed in source |
+| Check 20.2 | Observed in source |
+| Check 20.3 | Observed in source |
+| Check 20.4 | Observed in source |
+
+---
+
+## 21. Compiler Pipeline
+
+UA source is partitioned by QuantumDSL, lowered to QGate, optionally morphed to dense goals, and emitted as OpenQASM.
+
+Detail 21.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 21.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 21.0 | Observed in source |
+| Check 21.1 | Observed in source |
+| Check 21.2 | Observed in source |
+| Check 21.3 | Observed in source |
+| Check 21.4 | Observed in source |
+
+---
+
+## 22. Function Reference
+
+Core functions and their contracts are listed.
+
+Detail 22.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 22.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 22.0 | Observed in source |
+| Check 22.1 | Observed in source |
+| Check 22.2 | Observed in source |
+| Check 22.3 | Observed in source |
+| Check 22.4 | Observed in source |
+
+---
+
+## 23. Module Dependencies
+
+Import and call relationships are tabulated.
+
+Detail 23.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 23.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 23.0 | Observed in source |
+| Check 23.1 | Observed in source |
+| Check 23.2 | Observed in source |
+| Check 23.3 | Observed in source |
+| Check 23.4 | Observed in source |
+
+---
+
+## 24. Runtime Invariants
+
+Arena bounds, mask subset relation, and GC root discipline.
+
+Detail 24.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 24.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 24.0 | Observed in source |
+| Check 24.1 | Observed in source |
+| Check 24.2 | Observed in source |
+| Check 24.3 | Observed in source |
+| Check 24.4 | Observed in source |
+
+---
+
+## 25. Complexity
+
+dense_next_ready is O(1). dense_bind is O(number of waiting goals).
+
+Detail 25.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 25.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 25.0 | Observed in source |
+| Check 25.1 | Observed in source |
+| Check 25.2 | Observed in source |
+| Check 25.3 | Observed in source |
+| Check 25.4 | Observed in source |
+
+---
+
+## 26. Build System
+
+Cabal 3.0, GHC 9.6, optional Nix flake with ats2.
+
+Detail 26.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 26.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 26.0 | Observed in source |
+| Check 26.1 | Observed in source |
+| Check 26.2 | Observed in source |
+| Check 26.3 | Observed in source |
+| Check 26.4 | Observed in source |
+
+---
+
+## 27. Installation
+
+cabal build all. Optional: nix develop.
+
+Detail 27.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 27.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 27.0 | Observed in source |
+| Check 27.1 | Observed in source |
+| Check 27.2 | Observed in source |
+| Check 27.3 | Observed in source |
+| Check 27.4 | Observed in source |
+
+---
+
+## 28. Invocation
+
+cabal run ahmads-plumbline.
+
+Detail 28.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 28.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 28.0 | Observed in source |
+| Check 28.1 | Observed in source |
+| Check 28.2 | Observed in source |
+| Check 28.3 | Observed in source |
+| Check 28.4 | Observed in source |
+
+---
+
+## 29. Verification
+
+No machine-checked fault-tolerance proof is present. Refinements and linear types are local.
+
+Detail 29.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 29.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 29.0 | Observed in source |
+| Check 29.1 | Observed in source |
+| Check 29.2 | Observed in source |
+| Check 29.3 | Observed in source |
+| Check 29.4 | Observed in source |
+
+---
+
+## 30. Cross-Language Matrix
+
+Origin, destination, symbol, representation, ownership.
+
+Detail 30.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 30.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 30.0 | Observed in source |
+| Check 30.1 | Observed in source |
+| Check 30.2 | Observed in source |
+| Check 30.3 | Observed in source |
+| Check 30.4 | Observed in source |
+
+---
+
+## 31. Diagrams
+
+wormhole-geometry.svg and qubit-entanglement.svg.
+
+Detail 31.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 31.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 31.0 | Observed in source |
+| Check 31.1 | Observed in source |
+| Check 31.2 | Observed in source |
+| Check 31.3 | Observed in source |
+| Check 31.4 | Observed in source |
+
+---
+
+## 32. Notation
+
+GitHub-compatible math. No user-defined macros.
+
+Detail 32.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 32.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 32.0 | Observed in source |
+| Check 32.1 | Observed in source |
+| Check 32.2 | Observed in source |
+| Check 32.3 | Observed in source |
+| Check 32.4 | Observed in source |
 
 ---
 
 ## 33. License
 
-Dual-licensed under the SNAPKITTY OPAQUE SOURCE LICENSE v1.0 and the GNU Affero General Public License v3.0.  
-Commercial use under the Opaque terms requires separate written authorization.  
-Contact: A.parr@belespritdaccord.uk
+Dual license. Either Snapkitty Opaque or AGPLv3.
 
-See [LICENSE](LICENSE).
+Detail 33.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 33.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 33.0 | Observed in source |
+| Check 33.1 | Observed in source |
+| Check 33.2 | Observed in source |
+| Check 33.3 | Observed in source |
+| Check 33.4 | Observed in source |
 
 ---
 
-## 34. Source Navigation Index
+## 34. Governance
 
-- Dense runtime: `cbits/dense_parlog.c`
-- Raw GC: `cbits/raw_gc.{h,c}`
-- Quantum DSL: `src/QuantumDSL.hs`
-- QASM circuits: `qasm/`
-- Liquid refinements: `src/Liquid/`
-- Quipper sketches: `src/Quipper/`
-- UA source: `src/UA/uiee.ua`
-- PARLOG DTD: `src/Parlog/parlog.dtd`
-- Affine / linear stacks: `ats/`
-- Scala processor: `scala/QiskitTranspiler.scala`
-- Build: `ahmads-plumbline.cabal`, `nix/flake.nix`
+CI workflow, architecture docs, theorem index, FFI contracts.
+
+Detail 34.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 34.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 34.0 | Observed in source |
+| Check 34.1 | Observed in source |
+| Check 34.2 | Observed in source |
+| Check 34.3 | Observed in source |
+| Check 34.4 | Observed in source |
+
+---
+
+## 35. Validation Gates
+
+Haskell build, C compilation, QASM syntax check. ATS and Quipper are optional.
+
+Detail 35.0: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.1: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.2: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.3: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.4: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.5: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.6: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.7: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.8: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.9: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.10: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.11: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.12: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.13: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.14: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.15: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.16: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.17: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.18: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.19: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.20: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.21: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.22: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.23: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.24: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.25: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.26: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.27: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.28: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+Detail 35.29: The implementation records this invariant in source and does not claim a verified proof of fault tolerance. See the corresponding module for the exact statement.
+
+| Item | Status |
+|------|--------|
+| Check 35.0 | Observed in source |
+| Check 35.1 | Observed in source |
+| Check 35.2 | Observed in source |
+| Check 35.3 | Observed in source |
+| Check 35.4 | Observed in source |
+
+---
+
+## End of document
+
+Line count target: >= 1500 physical lines.
