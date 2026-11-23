@@ -599,229 +599,28 @@ SPDX identifier `LicenseRef-Sovereign-Leviathan-SL-AGPL3-001` is a local referen
 ---
 
 
-## Appendix A. Dense runtime contracts and traces
 
-### Allocation contract
+### Dense runtime contracts
 
-`dense_alloc_var` increments `arena_top` and stores a `D_UNBOUND` word. No bound check. Caller must stay below `MAX_TERMS = 65536`.
+`dense_alloc_var` increments `arena_top` and stores a `D_UNBOUND` word. No bound check is performed. The caller must remain below `MAX_TERMS`.
 
-### Spawn contract
+`dense_spawn` dereferences each input-mode argument. If the result is unbound and its index is less than 64, the corresponding bit is set in the wait mask. The slot is marked active and, if the mask is empty, ready.
 
-For each set bit in the input mask, dereference the argument. If unbound and index < 64, set the wait-mask bit. Mark active. Mark ready if wait mask is empty.
+`dense_bind` stores a `D_VAR` word. If the variable index is at least 64 the function returns. Otherwise it clears the bit in every waiting goal and promotes goals whose masks become zero.
 
-### Bind contract
+`dense_next_ready` returns the lowest set bit of `ready_mask` or `-1` and clears that bit from both masks.
 
-Store `D_VAR` word. If index ≥ 64, return. Clear the bit in every waiting goal. Promote if mask becomes zero.
-
-### Next-ready contract
-
-Return lowest set bit of `ready_mask` or -1. Clear from both masks.
-
-### Example trace
+### Example bind trace
 
 ```text
 Initial: ready_mask = 0b0001, active_mask = 0b0011
-Bind var 2 on slot 1 (waiting)
+Bind var 2 on slot 1
   wait_mask[1] &= ~(1<<2) → 0
   ready_mask |= (1<<1)
 Result: ready_mask = 0b0011
 ```
 
-## Appendix B. Quantum DSL algorithms
-
-### Partition algorithm
-
-Scan for first `FibSeq`, then `include`, then `namespace`. Four slices. Linear in lines.
-
-### Unrolling
-
-`QLoop lo hi f` applies `f` to every integer in `[lo, hi]` and concatenates. Recursive. Output size proportional to product of bounds.
-
-### Special case
-
-`QInit [0.5, 0.5, 0.5, 0.5]` emits two Hadamard gates. Other initializations become comments.
-
-## Appendix C. DemonHole derivation
-
-### Angles
-
-Base case: \( \theta = g \beta \).  
-Cross-coupling: \( \theta = g / N \).
-
-### Gate count
-
-At level \( \ell \): \( N / 2^\ell \) GJW gates. Sum is \( O(N) \). Scrambling adds another \( O(N) \).
-
-### Flow diagram
-
-```text
-N qubits
-  │ splitAt (N/2)
-  ▼
-left, right
-  │ scramble both
-  ▼
-recurse left, recurse right
-  │ zip + gjw_entangler
-  ▼
-unscramble (reverse_geometry)
-```
-
-## Appendix D. Liquid expansions
-
-### Work budget
-
-$$
-\begin{align*}
-L &= k_B T \ln 2 \\
-W_{\mathrm{prep}} &= L \\
-W_{\mathrm{sort}} &= -L \\
-W_{\mathrm{erase}} &= -L \\
-\alpha^2 &= L / (\hbar \omega) \\
-W_{\mathrm{battery\ extract}} &= -L \\
-W_{\mathrm{net\ incl\ prep}} &= -2L
-\end{align*}
-$$
-
-### Concurrence
-
-$$
-a_{00} a_{11} - a_{01} a_{10} = \frac{1}{2} \implies C = 1
-$$
-
-Decimal `0.7071067811865476` used. Floating-point not discussed.
-
-### Life rules
-
-Born on 3. Survive on 2 or 3. Else dead. Neighbour sum of eight cells. Indices assumed valid.
-
-## Appendix E. ATS resource transitions
-
-```text
-lin_stack(n) ──lin_push──► lin_stack(n+1)
-lin_stack(n+1) ──lin_pop──► (int, lin_stack(n))
-lin_stack(n) ──lin_drop──► void
-```
-
-`theorem_push_pop` composes push and pop. Type checker verifies length restoration.
-
-## Appendix F. Dex algorithms
-
-### Outer product
-
-```text
-for i j. f(xs[i], ys[j])
-```
-
-### Scan
-
-Prefix reduction. Quadratic implementation (re-fold each step).
-
-### CNOT
-
-Swaps amplitudes at indices 2 and 3. Control is high bit.
-
-### Prepare Bell
-
-Start at |0>, apply hadamard0, then cnot → bellPhiPlus.
-
-## Appendix G. Memory ownership matrix
-
-| Resource | Owner | Lifetime | Free |
-|----------|-------|----------|------|
-| Dense arena | C static | Process | Never |
-| Raw GC heap | C | Until collect | Sweep |
-| Linear buffer | Haskell LinBuf | withLinBuf | Exact once |
-| Curry indices | Caller | Until bind | N/A |
-
-## Appendix H. FFI call graph
-
-```text
-morphGoalsDense
-  └─ c_dense_spawn
-       └─ dense_spawn (C)
-
-cDenseAllocVar (Curry)
-  └─ external_d_C_cDenseAllocVar
-       └─ c_dense_alloc_var (C)
-```
-
-## Appendix I. QEC slice construction
-
-Steane logical i: `q[7i : 7i+6]`  
-Surface-17 logical i: `q[9i : 9i+8]`
-
-Named gates wrap the slice. Syndrome call appended for CNOT.
-
-## Appendix J. SYK coupling topology
-
-```text
-Majorana i ──J_{ijkl}── Majorana j,k,l
-     │
-     └── seed → linear congruential → uniform[-0.5,0.5] × scale
-```
-
-Not Gaussian. Deterministic for fixed seed.
-
-## Appendix K. Parser state machine
-
-```text
-INPUT ──stripProlog──► TOKENS
-  │
-  ▼
-parseNodes ──► SNode forest
-  │
-  ▼
-lowerProgram ──► Program (modes + clauses)
-```
-
-Empty elements: `arg`, `var`. Errors on unexpected forms.
-
-## Appendix L. Complexity summary
-
-| Component | Time | Space |
-|-----------|------|-------|
-| dense_next_ready | O(1) | O(1) |
-| dense_bind | O(w) | O(1) |
-| Emitter unroll | O(output) | O(output) |
-| Parser | O(input) | O(depth) |
-| L-system iterate | O(length × steps) | O(length) |
-
-## Appendix M. Failure modes
-
-| Component | Failure | Detection |
-|-----------|---------|-----------|
-| Dense | Out-of-range index | None |
-| Parser | Missing program | Error string |
-| Emitter | Large loop | Large output |
-| Liquid | Undischarged refinement | Solver fail |
-| ATS | Unconsumed linear | Type error |
-
-## Appendix N. Platform matrix
-
-| Toolchain | Version | Status |
-|-----------|---------|--------|
-| GHC | 9.6+ | Required |
-| Cabal | 3.0+ | Required |
-| GCC | any | C sources |
-| patscc | optional | ATS |
-| Quipper | optional | Circuits |
-| Liquid | optional | Refinements |
-
-## Appendix O. Recommended next steps
-
-1. Implement `dense_steane_correct`.
-2. Replace time-evolution stub with Trotter.
-3. Connect Dex Life to Liquid binder.
-4. Add Cabal test suite for mask invariants.
-5. Pin Nix inputs and commit lock file.
-
----
-
-
-## Appendix P. Detailed dense term algebra
-
-The 64-bit word layout:
+### Term word layout
 
 ```text
 63                          3 2 0
@@ -830,25 +629,20 @@ The 64-bit word layout:
 └───────────────────────────┴───┘
 ```
 
-Tag 0 = INT, 1 = VAR, 2 = UNBOUND. Payload is signed for INT, index for VAR.
+Tag 0 = `D_INT`, 1 = `D_VAR`, 2 = `D_UNBOUND`.
 
-Dereference follows VAR chains. No cycle check. Worst-case length equals number of prior binds.
-
-Arena is static 65536 × 8 = 512 KiB. Goal array is 64 slots. Both never shrink.
-
-## Appendix Q. Goal slot bit fields
+### Goal slot layout
 
 ```text
-GoalSlot
 ┌──────────┬──────────────────┬───────┬────────────┐
 │ pred_id  │ args[0..3]       │ arity │ wait_mask  │
 │ 32 bit   │ 4 × 32 bit       │ 8 bit │ 64 bit     │
 └──────────┴──────────────────┴───────┴────────────┘
 ```
 
-Arity ≤ 4. Wait mask only tracks variables < 64.
+Arity is at most 4. The wait mask tracks only variables with index less than 64.
 
-## Appendix R. Scheduler state machine
+### Scheduler transitions
 
 ```text
 SPAWN ──► ACTIVE
@@ -866,9 +660,15 @@ SPAWN ──► ACTIVE
       INACTIVE
 ```
 
-## Appendix S. OpenQASM emission example
+### Quantum DSL algorithms
 
-For the two-qubit pipeline:
+`partitionSections` scans for the first occurrence of `FibSeq`, then `include`, then `namespace`. The four slices are passed to `lowerSec`. The algorithm is linear in the number of lines.
+
+`unrollGate` expands a `QLoop` by applying the function to every integer in the closed range and concatenating the results. The expansion is recursive. Output size is proportional to the product of the loop bounds.
+
+`QInit` of four equal amplitudes emits two Hadamard gates. Other initializations become comments.
+
+### OpenQASM emission example
 
 ```qasm
 // Circuit: Pipeline_Entangle_Collapse
@@ -886,20 +686,12 @@ if (deg > 0.707) {
 }
 ```
 
-## Appendix T. Steane syndrome decode
+### DemonHole derivation
 
-```text
-syn6: bits 5:3 = X-stabilizers (Z errors)
-      bits 2:0 = Z-stabilizers (X errors)
+Base-case angle: \( \theta = g \beta \).  
+Cross-coupling angle: \( \theta = g / N \).
 
-if syn_x ≠ 0 then err_x = syn_x   // 1-based
-if syn_z ≠ 0 then err_z = syn_z
-return (err_x << 32) | err_z
-```
-
-Placeholder corrector does not write the arena.
-
-## Appendix U. DemonHole recursion tree
+At level \( \ell \) the cross-coupling applies \( N / 2^\ell \) GJW gates. The sum over levels is \( O(N) \). Scrambling adds a further linear term.
 
 ```text
 invoke_demon_hole_rec(N)
@@ -910,1100 +702,132 @@ invoke_demon_hole_rec(N)
   └─ unscramble(N)
 ```
 
-Depth log N. Total GJW gates O(N).
+### Liquid expansions
 
-## Appendix V. Liquid Game of Life binder structure
+$$
+\begin{align*}
+L &= k_B T \ln 2 \\
+W_{\mathrm{prep}} &= L \\
+W_{\mathrm{sort}} &= -L \\
+W_{\mathrm{erase}} &= -L \\
+\alpha^2 &= L / (\hbar \omega) \\
+W_{\mathrm{battery\ extract}} &= -L \\
+W_{\mathrm{net\ incl\ prep}} &= -2L
+\end{align*}
+$$
 
-Core functions (~20 lines). Remaining ~930 lines are indexed offset and population helpers establishing refined bounds for successive block sizes. Helpers cycle offsets through -1, 0, 1 and set population bounds equal to the index.
+For the Bell state:
 
-## Appendix W. Dex L-system rules
+$$
+a_{00} a_{11} - a_{01} a_{10} = \frac{1}{2} \implies C = 1
+$$
 
-| Rule | Substitution | Output |
-|------|--------------|--------|
-| Tree | F → F[+F]F[-F]F | Turtle path string |
-| Koch | F → F+F-F-F+F | Koch curve string |
-| Dragon | X → X+YF+, Y → -FX-Y | Dragon approximation |
+The source uses the decimal approximation `0.7071067811865476`.
 
-`applyRule` maps and concatenates. `iterate` applies n times.
+A cell is born with exactly three live neighbours. A live cell survives with two or three. All other cases die. The neighbour count is the sum of eight cells.
 
-## Appendix X. Category theory in Dex
-
-Objects: finite arrays of amplitudes.  
-Morphisms: matrices.  
-Composition: matrix product via `for i j. sum (for k. ...)`.  
-Identity: diagonal.  
-Tensor: Kronecker via index splitting.
-
-No coherence proofs.
-
-## Appendix Y. Entanglement states
-
-| State | Non-zero indices | Amplitude |
-|-------|------------------|-----------|
-| Φ+ | 0, 3 | 1/√2 |
-| Ψ+ | 1, 2 | 1/√2 |
-| GHZ_n | 0, 2^n-1 | 1/√2 |
-
-`prepareBell` produces Φ+.
-
-## Appendix Z. Cellular automaton neighbourhood
+### ATS resource transitions
 
 ```text
-i-1   i   i+1
- ┌───┬───┬───┐
- │ L │ C │ R │
- └───┴───┴───┘
+lin_stack(n) ──lin_push──► lin_stack(n+1)
+lin_stack(n+1) ──lin_pop──► (int, lin_stack(n))
+lin_stack(n) ──lin_drop──► void
 ```
 
-`wolframRule` packs L,C,R into 0–7 and tests bit of rule number.
+`theorem_push_pop` composes push and pop. The type checker verifies length restoration.
 
-## Appendix AA. Boyer–Moore tables
+### Dex algorithms
 
-Bad-character: 256 entries, rightmost occurrence or -1.  
-Good-suffix: pattern length entries, shift to align next match.  
-Both allocated and freed inside the function.
+The outer product applies a binary operator to every pair of elements. The scan computes the prefix reduction by re-folding on every step and is therefore quadratic. The array-parallel CNOT swaps amplitudes at indices 2 and 3. `prepareBell` starts from the zero state, applies `hadamard0`, then `cnot`, and yields `bellPhiPlus`.
 
-Linear wrapper:
+### Memory ownership
 
-```haskell
-withLinBuf sz k = do
-  p <- mallocBytes sz
-  (Ur res, LinBuf p' _) <- k (LinBuf p sz)
-  free p'
-  pure res
-```
+| Resource | Owner | Lifetime | Free |
+|----------|-------|----------|------|
+| Dense arena | C static | Process | Never |
+| Raw GC heap | C | Until collect | Sweep |
+| Linear buffer | Haskell `LinBuf` | `withLinBuf` | Exact once |
+| Curry indices | Caller | Until bind | N/A |
 
-## Appendix AB. Oz dataflow protocol
+### FFI call graph
 
 ```text
-Thread A: awaitBound(var)
-  ├─ unbound → register MVar
-  └─ re-check → if still unbound, takeMVar
+morphGoalsDense
+  └─ c_dense_spawn
+       └─ dense_spawn (C)
 
-Thread B: bindDataflow(var, val)
-  ├─ bind under lock
-  └─ putMVar all registered signals
+cDenseAllocVar (Curry)
+  └─ external_d_C_cDenseAllocVar
+       └─ c_dense_alloc_var (C)
 ```
 
-Lost-wakeup prevented by re-check after registration.
+### QEC slices
 
-## Appendix AC. Sample SGML execution
+Steane logical \( i \): `q[7i:7i+6]`.  
+Surface-17 logical \( i \): `q[9i:9i+8]`.
 
-```text
-main(R) :- pop(R), push(42), print(R).
-```
+Named gates wrap the slice. A syndrome call is appended for CNOT.
 
-1. Allocate R (unbound).  
-2. Push as root.  
-3. evalGoal spawns three body goals.  
-4. pop suspends until push binds.  
-5. print reads 42.  
-6. Collect.
-
-## Appendix AD. Cabal exposed modules
-
-```
-Liquid.WorkBudget
-Liquid.CNOTTheorem
-Quipper.DemonCycle
-Quipper.CNOTEntangle
-QuantumDSL
-QuantumToDense
-DenseMorph
-```
-
-C sources linked into library. Executable depends on library.
-
-## Appendix AE. Nix flake outputs
-
-```nix
-packages.default = callCabal2nix ...
-devShells.default = shellFor { packages = [pkg]; nativeBuildInputs = [ats2 gcc ...]; }
-```
-
-No lock file. Inputs float.
-
-## Appendix AF. CI job steps
-
-Haskell: checkout → setup GHC 9.6.6 → cabal update → cabal build all → cabal test || echo.  
-C: gcc -c -Wall -Wextra -O2 on three files → /tmp.
-
-No cache. No artifacts.
-
-## Appendix AG. License header text
-
-Every file begins with:
-
-```
-========================================================================
-; SOVEREIGN LEVIATHAN NODE LICENSE
-; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
-; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
-; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
-; ========================================================================
-```
-
-Followed by AGPLv3 + Sovereign Leviathan additional terms statement.
-
-## Appendix AH. Cross-module dependency matrix
-
-| From | To | Mechanism |
-|------|----|-----------|
-| QuantumDSL | UA | Text partition |
-| QuantumToDense | DenseMorph | Function call |
-| DenseMorph | dense_parlog.c | FFI |
-| Main.hs | raw_gc.c | FFI |
-| Dex GameOfLife | Liquid binder | Intended FFI (not implemented) |
-| ATS | C runtime | Documentary |
-
-## Appendix AI. Invariant summary
-
-| Invariant | Location | Enforced by |
-|-----------|----------|-------------|
-| ready ⊆ active | dense_parlog.c | Construction |
-| Length index exact | ATS lin_stack | Type checker |
-| Net work = -2L | Liquid WorkBudget | Refinement |
-| Concurrence = 1 | Liquid CNOTTheorem | Refinement |
-| Linear consumption | ATS linear_pipeline | Type checker |
-
-## Appendix AJ. Glossary
-
-| Term | Meaning |
-|------|---------|
-| Arena | Static tagged-word array |
-| Commit | First matching clause selected |
-| Concurrence | 2\|a00 a11 - a01 a10\| |
-| Dense | Bit-mask scheduling |
-| Goal | Predicate application |
-| Mask | 64-bit wait or ready word |
-| Morph | Sparse list → dense slots |
-| Slice | Physical qubits for one logical |
-| TFD | Thermofield double |
-| Unroll | Loop → sequential gates |
-
----
-
-
-## Appendix AK. Quantum register layouts
-
-### Two-qubit Bell
+### SYK coupling
 
 ```text
-q0: ──H──●──
-         │
-q1: ─────X──
+Majorana i ──J_{ijkl}── Majorana j,k,l
+     │
+     └── seed → linear congruential → uniform[-0.5,0.5] × scale
 ```
 
-Produces \( \lvert\Phi^+\rangle \).
+The values are uniform, not Gaussian. The same seed always produces the same list.
 
-### 256-qubit manifold step
-
-```text
-for i in 0..255:
-  ry(theta*(i+1)) q[i]
-  if i > 0: cx q[i-1], q[i]
-```
-
-### Steane logical slice
+### Parser flow
 
 ```text
-Logical 0: q[0:6]
-Logical 1: q[7:13]
-...
-Logical 255: q[1785:1791]
-```
-
-## Appendix AL. Majorana support example
-
-Index 0 (even): Y on qubit 0.  
-Index 1 (odd): X on qubit 0, Z on preceding.  
-`anticommutes` checks index inequality only.
-
-## Appendix AM. Coupling hash
-
-```text
-hash = seed + i*1 + j*2 + k*3 + l*4
-value = (hash % 1000 / 1000.0 - 0.5) * scale
-```
-
-Uniform, not Gaussian. Deterministic.
-
-## Appendix AN. TFD preparation
-
-```text
-for each pair (left, right):
-  H left
-  controlled-phase(beta/2) left, right
-```
-
-Product of Bell-like pairs. Not full interacting TFD.
-
-## Appendix AO. Time-evolution stub
-
-```text
-for each coupling J:
-  RZ(J * t) on first qubit
-```
-
-Not a four-Majorana Trotter step.
-
-## Appendix AP. Scrambling proxy
-
-```text
-X at site
-timeEvolve
-H on all qubits
-```
-
-Final H layer proxies X-basis measurement.
-
-## Appendix AQ. Parser error cases
-
-| Input | Result |
-|-------|--------|
-| No <program> | Error "Missing <program> root" |
-| Unknown term | Error "Unsupported <term>" |
-| Unbound var | Error "Unbound SGML variable" |
-| No matching clause | Error "No matching Parlog clause" |
-
-## Appendix AR. Heap lock protocol
-
-All C heap access under `MVar` lock via `withHeap`. Serializes allocation, bind, collect.
-
-## Appendix AS. Root discipline
-
-```haskell
-bracket (c_gc_push_root slot) (\_ -> c_gc_pop_roots 1) $ \_ ->
-  evalGoal ...
-```
-
-Ensures pop on exception.
-
-## Appendix AT. Materialization cases
-
-| TermAst | Action |
-|---------|--------|
-| TInt n | alloc TAG_INT, set_int |
-| TVar name | lookup env or error |
-| TNil | alloc TAG_VAR (unbound) |
-
-## Appendix AU. Mode extraction
-
-`dir="out"` → Out, else In. Keyed by (pred, arity).
-
-## Appendix AV. Clause body spawn
-
-```haskell
-dones <- mapM (\g -> forkIO (evalGoal g >> putMVar done ())) body
-mapM_ takeMVar dones
-```
-
-AND-parallel, parent waits.
-
-## Appendix AW. Fibonacci word generation
-
-Seed "A".  
-Rule: A→AB, B→A.  
-10 iterations, take 16 chars.  
-Map A→1.0, else 0.618, scale by 0.618^k.  
-Frequency = 440 * (E/Emax)^1.5.  
-Becomes RZ angle.
-
-## Appendix AX. Manifold while condition
-
-```qasm
-while (abs(current_energy - 0.0) >= 1e-6) {
-  ...
-  measure
-  reset
-}
-```
-
-Energy computation not in Haskell emitter.
-
-## Appendix AY. Color-code variant dispatch
-
-```haskell
-case var of
-  Surface17   -> ("rx_surface17", "cx_surface17")
-  Color666_d3 -> ("rx_color666", "cx_color666")
-  ...
-```
-
-Slice width from `dataThreshold`.
-
-## Appendix AZ. Threshold estimate
-
-```haskell
-expPow = fromIntegral ((d + 1) `div` 2)
-if p >= pTh then Left msg else Right (0.1 * (p/pTh)**expPow)
-```
-
-Constant 0.1 hard-coded.
-
-## Appendix BA. Linear stack push/pop
-
-```ats
-implement lin_push (s, x) = LinCons (x, s)
-implement lin_pop (s) = let val ~LinCons (x, rest) = s in @(x, rest) end
-```
-
-Index changes verified by type.
-
-## Appendix BB. Arena allocation
-
-```ats
-implement arena_alloc (a) =
-  let val ~LinArena (top) = a in @(top, LinArena (top + 1)) end
-```
-
-Capacity index unchanged.
-
-## Appendix BC. Goal wake
-
-```ats
-implement goal_wake (g) =
-  case+ g of
-  | ~LinReady (pid) => LinReady (pid)
-  | ~LinWait (pid, _) => LinReady (pid)
-```
-
-Consumes either form.
-
-## Appendix BD. Dex outer product
-
-```dex
-def outer (f: a -> b -> c) (xs: n=>a) (ys: m=>b) : n=>m=>c =
-  for i j. f (xs[i]) (ys[j])
-```
-
-## Appendix BE. Dex scan
-
-```dex
-def scan (f: a -> a -> a) (z: a) (xs: n=>a) : n=>a =
-  for i. foldl f z (for j. if j <= i then xs[j] else z)
-```
-
-Quadratic.
-
-## Appendix BF. Dex stencil
-
-```dex
-def stencil3 (grid: n=>Float) : n=>3=>Float =
-  for i. for k. grid[i + k - 1]
-```
-
-Boundary undefined.
-
-## Appendix BG. Quantum CA step
-
-```dex
-def qcaStep (rule: (Fin 8)=>(Fin 2)=>Float) (grid: n=>Float) : n=>Float =
-  for i.
-    let idx = pack(stencil3 grid i)
-    in rule[idx, 1] * grid[i] + rule[idx, 0] * (1.0 - grid[i])
-```
-
-Not unitary.
-
-## Appendix BH. Single excitation
-
-```dex
-def singleExcitation (n: Nat) : n=>Float =
-  for i. if i == n / 2 then 1.0 else 0.0
-```
-
-## Appendix BI. Measurement threshold
-
-```dex
-def measureThreshold (state: n=>Float) (thresh: Float) : n=>Bool =
-  for i. abs (state[i]) > thresh
-```
-
-Default thresh 0.5 in seedFromEntanglement.
-
-## Appendix BJ. Life step placeholder
-
-```dex
-def lifeStep (grid: n=>Bool) : n=>Bool =
-  for i. (if grid[i] then 1 else 0) == 1
-```
-
-Full neighbour sum expected from Liquid binder (not connected).
-
-## Appendix BK. Category compose
-
-```dex
-def compose (f: n=>m=>Float) (g: m=>p=>Float) : n=>p=>Float =
-  for i j. sum (for k. f[i, k] * g[k, j])
-```
-
-## Appendix BL. Identity matrix
-
-```dex
-def id (n: Nat) : n=>n=>Float =
-  for i j. if i == j then 1.0 else 0.0
-```
-
-## Appendix BM. Tensor product
-
-```dex
-def tensor (a: n=>m=>Float) (b: p=>q=>Float) : (n*p)=>(m*q)=>Float =
-  for i j.
-    let (i1, i2) = (i / p, i % p)
-        (j1, j2) = (j / q, j % q)
-    in a[i1, j1] * b[i2, j2]
-```
-
-Assumes even division.
-
-## Appendix BN. GHZ state
-
-```dex
-def ghz (n: Nat) : (Fin (2^n))=>Float =
-  for i. if i == 0 || i == (2^n - 1) then 0.70710678118 else 0.0
-```
-
-## Appendix BO. CNOT permutation
-
-```dex
-def cnot (state: (Fin 4)=>Float) : (Fin 4)=>Float =
-  for i.
-    case i of
-      0 -> state[0]
-      1 -> state[1]
-      2 -> state[3]
-      3 -> state[2]
-```
-
-## Appendix BP. Hadamard on qubit 0
-
-```dex
-def hadamard0 (state: (Fin 4)=>Float) : (Fin 4)=>Float =
-  let s = 0.70710678118
-  in for i.
-    case i of
-      0 -> s * (state[0] + state[2])
-      ...
-```
-
-## Appendix BQ. Prepare Bell
-
-```dex
-def prepareBell : (Fin 4)=>Float =
-  cnot (hadamard0 (for i. if i == 0 then 1.0 else 0.0))
-```
-
-## Appendix BR. Concurrence reduction
-
-```dex
-def concurrence (state: (Fin 4)=>Float) : Float =
-  let a00 = state[0] ... in 2.0 * abs (a00 * a11 - a01 * a10)
-```
-
-## Appendix BS. Wolfram rule
-
-```dex
-def wolframRule (rule: Nat) (left: Bool) (center: Bool) (right: Bool) : Bool =
-  let idx = (if left then 4 else 0) + (if center then 2 else 0) + (if right then 1 else 0)
-  in (rule .&. (1 << idx)) /= 0
-```
-
-## Appendix BT. Rule 30 / 90
-
-```dex
-def rule30 (grid: n=>Bool) : n=>Bool = stepCA 30 grid
-def rule90 (grid: n=>Bool) : n=>Bool = stepCA 90 grid
-```
-
-## Appendix BU. Tree L-system
-
-```dex
-def treeRule (c: Char) : String =
-  case c of
-    'F' -> "F[+F]F[-F]F"
-    _   -> toString c
-```
-
-## Appendix BV. Koch rule
-
-```dex
-def kochRule (c: Char) : String =
-  case c of
-    'F' -> "F+F-F-F+F"
-    _   -> toString c
-```
-
-## Appendix BW. Dragon rule
-
-```dex
-def dragonRule (c: Char) : String =
-  case c of
-    'X' -> "X+YF+"
-    'Y' -> "-FX-Y"
-    _   -> toString c
-```
-
-## Appendix BX. Apply rule
-
-```dex
-def applyRule (rule: String -> String) (s: String) : String =
-  foldl (++) "" (map rule (toList s))
-```
-
-## Appendix BY. Iterate
-
-```dex
-def iterateTree (n: Nat) : String =
-  iterate n (applyRule treeRule) "F"
-```
-
-## Appendix BZ. Entanglement to Life
-
-```dex
-def seedFromEntanglement (state: n=>Float) : n=>Bool =
-  measureThreshold state 0.5
-
-def entangleThenLive (steps: Nat) (init: (Fin 4)=>Float) : n=>Bool =
-  let measured = seedFromEntanglement init
-  in iterate steps lifeStep measured
-```
-
----
-
-
-## Appendix CA. Raw GC mark-sweep phases
-
-1. Clear marks.  
-2. Mark from roots (recursive).  
-3. Sweep allocation list, free unmarked.  
-4. No compaction. Allocation continues from previous top.
-
-## Appendix CB. Term accessors
-
-| Accessor | Operation |
-|----------|-----------|
-| term_tag | Read tag |
-| term_set_int | Write ival |
-| term_get_int | Read ival |
-| term_bind_var | Write binding |
-| term_get_binding | Read binding |
-| term_set_cons | Write head/tail |
-| term_get_head | Read head |
-| term_get_tail | Read tail |
-
-## Appendix CC. GC root stack
-
-```text
-roots: [ptr0, ptr1, ..., ptrk]
-push: append slot
-pop n: drop last n
-```
-
-Collector starts from every root.
-
-## Appendix CD. Dense Steane correct placeholder
-
-```c
-void dense_steane_correct(uint32_t base, uint64_t decoded) {
-    // if err_x: mark correction on base + err_x - 1
-    // if err_z: mark Z correction
-    // currently empty
-}
-```
-
-## Appendix CE. QASM manifold files
-
-| File | Qubits | Purpose |
-|------|--------|---------|
-| manifold_steane_qec.qasm | 1792 | 256 × 7 Steane |
-| manifold_surface17_qec.qasm | 2304 | 256 × 9 Surface-17 |
-| manifold_colorcode_qec.qasm | library | Flagged plaquettes |
-
-## Appendix CF. Scala header extraction
-
-Looks for `qubit[N]` pattern. Parses N. Emits:
-
-```
-OPENQASM 3.0;
-include "stdgates.inc";
-qubit[N] q;
-```
-
-No body processing.
-
-## Appendix CG. Lisp isolation
-
-`qa5-reactive.lisp` is not imported. `proof-popped.txt` records one run. Retained as historical artifact.
-
-## Appendix CH. UA InitState
-
-```
-InitState = [0.5 0.5 0.5 0.5]
-```
-
-Recognized by DSL as two Hadamards.
-
-## Appendix CI. UA CNOT matrix
-
-```
-1 0 0 0
-0 1 0 0
-0 0 0 1
-0 0 1 0
-```
-
-Standard computational basis.
-
-## Appendix CJ. UA CalcDeg
-
-```
-deg = 2 × abs ( (a[0] × a[3]) - (a[1] × a[2]) )
-```
-
-Matches Liquid `calcDeg`.
-
-## Appendix CK. UA GatedCollapse
-
-```
-(deg > thresh) ? measure : state
-```
-
-Emitted as QCond.
-
-## Appendix CL. UA FibSeq
-
-Substitution A→AB, B→A, 10 times. Truncated to 16.
-
-## Appendix CM. UA ProjectSpectrum
-
-Map A→1.0 else 0.618, multiply by 0.618^index.
-
-## Appendix CN. UA Sonify
-
-f = 440 * (E/Emax)^1.5. Becomes RZ angles.
-
-## Appendix CO. UA manifold_step
-
-RY + CNOT chain over 256 qubits. While on energy.
-
-## Appendix CP. UA Q# ManifoldGreedyStep
-
-RX + CNOT chain. Emitted as QLoop.
-
-## Appendix CQ. Section markers
-
-`FibSeq` starts Fibonacci section.  
-`include` starts QASM section.  
-`namespace` starts Q# section.
-
-## Appendix CR. Comment stripping
-
-`stripSemiComments` drops after `;` and blank lines.
-
-## Appendix CS. Expression variables
-
-`collectVars` walks gates, extracts EVar. `nubVars` deduplicates preserving order. Emitted as `input float[64]`.
-
-## Appendix CT. Expression rendering
-
-Numbers via show. Variables by name. Binary ops parenthesized. No simplification.
-
-## Appendix CU. Loop unrolling
-
-```haskell
-QLoop lo hi f -> concatMap (unrollGate ind) (concatMap f [lo .. hi])
-```
-
-Finite range. Recursive on body.
-
-## Appendix CV. Conditional emission
-
-```haskell
-QCond cond _ gs -> ["if (" <> cond <> ") {"] <> concatMap (unrollGate "  ") gs <> ["}"]
-```
-
-Threshold ignored.
-
-## Appendix CW. While emission
-
-```haskell
-QWhile cond gs -> ["while (" <> cond <> ") {"] <> ... <> ["}"]
-```
-
-Body unrolled once. No termination proof.
-
-## Appendix CX. Initialization special case
-
-Pattern match on four 0.5 values → two h gates. Else comment.
-
-## Appendix CY. Measurement form
-
-```qasm
-c[c] = measure q[q];
-```
-
-No bounds check.
-
-## Appendix CZ. Reset form
-
-```qasm
-reset q[q];
-```
-
-## Appendix DA. Header
-
-```qasm
-// Circuit: name
-OPENQASM 3.0;
-include "stdgates.inc";
-qubit[n] q;
-bit[n] c;
-```
-
-Unconditional.
-
-## Appendix DB. Free variable inputs
-
-```qasm
-input float[64] theta;
-```
-
-One per unique variable.
-
-## Appendix DC. Steane slice string
-
-```haskell
-steaneSlice i = "q[" <> show (7*i) <> ":" <> show (7*i+6) <> "]"
-```
-
-## Appendix DD. Surface-17 slice
-
-```haskell
-surface17Slice i = "q[" <> show (9*i) <> ":" <> show (9*i+8) <> "]"
-```
-
-## Appendix DE. Variant slice
-
-```haskell
-slice i = "q[" <> show (nData*i) <> ":" <> show (nData*i + nData - 1) <> "]"
-```
-
-## Appendix DF. Named gate selection
-
-Surface-17: rx_surface17, cx_surface17.  
-Color666: rx_color666, cx_color666.  
-Color488: rx_color488, cx_color488.
-
-## Appendix DG. Threshold data
-
-| Variant | n | d | p_th |
-|---------|---|---|------|
-| Surface17 | 9 | 3 | 0.008 |
-| Color666_d3 | 7 | 3 | 0.003 |
-| Color488_d5 | 17 | 5 | 0.002 |
-| Color666_d5 | 19 | 5 | 0.002 |
-
-Literals only.
-
-## Appendix DH. DemonState length check
-
-```haskell
-if length qD /= length qSH then error "Topology Error..."
-```
-
-No gates generated by the check.
-
-## Appendix DI. GJW entangler
-
-```haskell
-qmultigate "CNOT" [qD, qSH]
-gate_RZ theta qSH
-qmultigate "CNOT" [qD, qSH]
-```
-
-## Appendix DJ. Scramble recursion
-
-```haskell
-gate_H q1
-qmultigate "CNOT" [q1, q2]
-gate_T q2
-scramble_register (q2:qs)
-scramble_register (q1:qs)
-```
-
-Sequential. Reverse geometry inverts.
-
-## Appendix DK. Split
-
-```haskell
-half = n `div` 2
-(qD_left, qD_right) = splitAt half qD
-```
-
-Odd n: left shorter.
-
-## Appendix DL. Cross-coupling
-
-```haskell
-forM_ (zip qD qSH) $ \(qd, qsh) ->
-  gjw_entangler (couplingG params / fromIntegral n) qd qsh
-```
-
-Sequential.
-
-## Appendix DM. Base case
-
-```haskell
-gjw_entangler theta qD qSH
-swap qD qSH
-```
-
-## Appendix DN. Empty case
-
-```haskell
-invoke_demon_hole_rec _ [] [] = return ()
-```
-
-## Appendix DO. Coupling sign
-
-Positive documented. Negative reverses RZ. Not enforced.
-
-## Appendix DP. Temperature use
-
-Only in base-case angle. Independent of cross-coupling.
-
-## Appendix DQ. Precision field
-
-`errorEps` stored but unused.
-
-## Appendix DR. Quipper imports
-
-Matrix and Arith imported but unused in visible definitions.
-
-## Appendix DS. Multi-gate name
-
-`"CNOT"` string resolved by Quipper runtime.
-
-## Appendix DT. Reverse geometry
-
-`reverse_geometry (scramble_register qD)` produces inverse circuit.
-
-## Appendix DU. Comment statements
-
-```haskell
-comment "--- BEGIN AHMADS PLUMBLINE: DEMON HOLE U_DH ---"
-...
-comment "--- END ..."
-```
-
-Appear in diagrams only.
-
-## Appendix DV. Majorana construction
-
-```haskell
-Majorana { majIndex = i, majSupport = replicate n I }
-```
-
-Identity support placeholder.
-
-## Appendix DW. Anticommutes
-
-```haskell
-anticommutes m1 m2 = majIndex m1 /= majIndex m2
-```
-
-Index check only.
-
-## Appendix DX. Generate couplings
-
-Enumerates i < j < k < l. Hash of seed and indices. Scale to [-0.5, 0.5] × SYK factor.
-
-## Appendix DY. Build Hamiltonian
-
-```haskell
-buildHamiltonian n seed = (majoranas, couplings)
-```
-
-Pair of lists.
-
-## Appendix DZ. Time evolve stub
-
-```haskell
-timeEvolve ham t qs = mapM_ (\j -> gate_RZ (j * t) (head qs)) couplings
-```
-
-Single qubit.
-
-## Appendix EA. Scramble operator
-
-```haskell
-scrambleOperator site t qs = do
-  gate_X (qs !! site)
-  timeEvolve ... t qs
-  mapM_ gate_H qs
-```
-
-## Appendix EB. Prepare TFD
-
-```haskell
-prepareTFD beta left right = forM_ (zip left right) $ \(l, r) -> do
-  gate_H l
-  controlled_phase (beta / 2) l r
-```
-
-## Appendix EC. Couple wormhole
-
-```haskell
-coupleWormhole mu left right = forM_ (zip left right) $ \(l, r) ->
-  controlled_phase mu l r
-```
-
-## Appendix ED. Traversable protocol
-
-```haskell
-traversableProtocol t mu left right = do
-  prepareTFD 1.0 left right
-  timeEvolve ... t left
-  timeEvolve ... t right
-  coupleWormhole mu left right
-  timeEvolve ... t left
-  timeEvolve ... t right
-```
-
-Uses stub evolution.
-
-## Appendix EE. Game of Life circuit types
-
-```haskell
-type Cell = Qubit
-data Neighbourhood = Neighbourhood { nNW :: Cell, ... nSE :: Cell }
-```
-
-Eight fields. Center separate.
-
-## Appendix EF. Count neighbours stub
-
-```haskell
-countNeighbours n = return 0
-```
-
-## Appendix EG. Step cell stub
-
-```haskell
-stepCell cell nb = return cell
-```
-
-## Appendix EH. Step grid stub
-
-```haskell
-stepGrid grid = return grid
-```
-
-## Appendix EI. Run generations
-
-```haskell
-runGenerations 0 g = return g
-runGenerations n g = stepGrid g >>= runGenerations (n - 1)
-```
-
-Ordinary recursion. No gates in stub.
-
-## Appendix EJ. Liquid nextState
-
-```haskell
-nextState cell n
-  | n == 3 = 1
-  | n == 2 && cell == 1 = 1
-  | otherwise = 0
-```
-
-## Appendix EK. Count neighbours
-
-```haskell
-countNeighbours nw n ne w e sw s se = nw + n + ne + w + e + sw + s + se
-```
-
-Refinement 0 ≤ result ≤ 8.
-
-## Appendix EL. Step cell
-
-```haskell
-stepCell c nw ... se = nextState c (countNeighbours ...)
-```
-
-## Appendix EM. Dex step flat
-
-```haskell
-dexStepFlat n grid = grid
-```
-
-Placeholder.
-
-## Appendix EN. Run generations Liquid
-
-```haskell
-runGenerations 0 g = g
-runGenerations k g = runGenerations (k - 1) (dexStepFlat (length g) g)
-```
-
-## Appendix EO. Still life predicate
-
-```haskell
-predicate IsStillLife C N = nextState C N == C
-```
-
-## Appendix EP. Period-2 predicate
-
-```haskell
-predicate IsPeriod2 C1 C2 = nextState C1 3 == C2 && nextState C2 3 == C1
-```
-
-## Appendix EQ. Offset helpers
-
-Family of functions returning -1, 0, or 1 with refinements. Unused by core.
-
-## Appendix ER. Population helpers
-
-Family returning the index with refinement 0 ≤ v ≤ index. Document bounds.
-
-## Appendix ES. Dex mooreStep
-
-```dex
-def mooreStep (grid: n=>Bool) : n=>Bool =
-  for i. (if grid[i] then 1 else 0) == 1
-```
-
-## Appendix ET. Dex runLife
-
-```dex
-def runLife (steps: Nat) (init: n=>Bool) : (steps+1)=>n=>Bool =
-  iterate steps mooreStep init
-```
-
-## Appendix EU. Category id
-
-Diagonal ones.
-
-## Appendix EV. Category tensor
-
-Kronecker via index split.
-
-## Appendix EW. Bell PhiPlus
-
-Amplitudes at 0 and 3.
-
-## Appendix EX. Bell PsiPlus
-
-Amplitudes at 1 and 2.
-
-## Appendix EY. GHZ
-
-Non-zero only at 0 and 2^n-1.
-
-## Appendix EZ. Concurrence Dex
-
-2 * abs(a00*a11 - a01*a10).
-
----
+INPUT ──stripProlog──► TOKENS
+  │
+  ▼
+parseNodes ──► SNode forest
+  │
+  ▼
+lowerProgram ──► Program (modes + clauses)
+```
+
+Empty elements are `arg` and `var`. Unexpected forms raise errors.
+
+### Complexity
+
+| Component | Time | Space |
+|-----------|------|-------|
+| `dense_next_ready` | \( O(1) \) | \( O(1) \) |
+| `dense_bind` | \( O(w) \) | \( O(1) \) |
+| Emitter unroll | \( O(\text{output}) \) | \( O(\text{output}) \) |
+| Parser | \( O(\text{input}) \) | \( O(\text{depth}) \) |
+| L-system iterate | \( O(\text{length} \times \text{steps}) \) | \( O(\text{length}) \) |
+
+### Failure modes
+
+| Component | Failure | Detection |
+|-----------|---------|-----------|
+| Dense | Out-of-range index | None |
+| Parser | Missing program | Error string |
+| Emitter | Large loop | Large output |
+| Liquid | Undischarged refinement | Solver fail |
+| ATS | Unconsumed linear | Type error |
+
+### Platform
+
+| Toolchain | Version | Status |
+|-----------|---------|--------|
+| GHC | 9.6+ | Required |
+| Cabal | 3.0+ | Required |
+| GCC | any | C sources |
+| patscc | optional | ATS |
+| Quipper | optional | Circuits |
+| Liquid | optional | Refinements |
+
+### Recommended next steps
+
+1. Implement `dense_steane_correct`.
+2. Replace the time-evolution stub with a Trotter step.
+3. Connect the Dex Life module to the Liquid binder.
+4. Add a Cabal test suite for the mask invariants.
+5. Pin the Nix inputs and commit a lock file.
 
