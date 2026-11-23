@@ -1,0 +1,61 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+-- Full quantum entanglement modelled with Dex array parallelism.
+-- A pure state on n qubits is a 2^n-dimensional array of amplitudes.
+-- Entanglement is non-factorizability of that array.
+
+def bellPhiPlus : (Fin 4)=>Float =
+  for i. if i == 0 || i == 3 then 0.70710678118 else 0.0
+
+def bellPsiPlus : (Fin 4)=>Float =
+  for i. if i == 1 || i == 2 then 0.70710678118 else 0.0
+
+-- GHZ state on n qubits: ( |0...0> + |1...1> ) / sqrt(2)
+def ghz (n: Nat) : (Fin (2^n))=>Float =
+  for i.
+    if i == 0 || i == (2^n - 1) then 0.70710678118 else 0.0
+
+-- Array-parallel CNOT on a 2-qubit state (4 amplitudes)
+def cnot (state: (Fin 4)=>Float) : (Fin 4)=>Float =
+  for i.
+    case i of
+      0 -> state[0]
+      1 -> state[1]
+      2 -> state[3]
+      3 -> state[2]
+
+-- Array-parallel Hadamard on qubit 0 of a 2-qubit state
+def hadamard0 (state: (Fin 4)=>Float) : (Fin 4)=>Float =
+  let s = 0.70710678118
+  in for i.
+    case i of
+      0 -> s * (state[0] + state[2])
+      1 -> s * (state[1] + state[3])
+      2 -> s * (state[0] - state[2])
+      3 -> s * (state[1] - state[3])
+
+-- Prepare |Phi+> from |00> by H then CNOT
+def prepareBell : (Fin 4)=>Float =
+  cnot (hadamard0 (for i. if i == 0 then 1.0 else 0.0))
+
+-- Concurrence proxy for a 2-qubit pure state (array reduction)
+def concurrence (state: (Fin 4)=>Float) : Float =
+  let a00 = state[0]
+      a01 = state[1]
+      a10 = state[2]
+      a11 = state[3]
+  in 2.0 * abs (a00 * a11 - a01 * a10)
