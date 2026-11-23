@@ -636,6 +636,31 @@ flowchart TD
 |--------|----------------------------|
 | \(w = (v \ll 3) \lor t\) | Dense tagged word |
 | \(\mathrm{wait\_mask}\) | Bit \(v\) set ⇒ suspended on variable \(v\) |
+| \(C = 2\lvert a_{00}a_{11}-a_{01}a_{10}\rvert\) | UA `CalcDeg` |
+| \(k_B T \ln 2\) | Landauer energy used in `WorkBudget` |
+| \([[n,k,d]]\) | Stabilizer code parameters (documented counts only) |
+| \(X_L, Z_L\) | Logical Pauli operators as written in the QASM comments |
+
+### Corrected math source (GitHub-compatible)
+
+```latex
+% Dense word
+w = (v \ll 3) \lor t, \qquad t \in \{0,1,2\}
+
+% Suspension mask
+v \in \mathrm{wait\_mask}(g) \iff \mathrm{the\ input-mode\ argument\ at\ } v \mathrm{\ is\ unbound}.
+
+% Bind step
+\mathrm{wait\_mask}(g) \leftarrow \mathrm{wait\_mask}(g) \land \lnot(1 \ll v)
+
+% Concurrence
+C = 2 \lvert a_{00} a_{11} - a_{01} a_{10} \rvert.
+
+% Landauer
+W_{\mathrm{net\ incl\ prep}} = -2\, k_B T \ln 2
+```
+
+These forms use `\mathrm` and `\lvert`/`\rvert` so they render without custom macros.
 | $C = 2\lvert a_{00}a_{11}-a_{01}a_{10}\rvert$ | UA `CalcDeg` |
 | $k_B T \ln 2$ | Landauer energy used in `WorkBudget` |
 | $[[n,k,d]]$ | Stabilizer code parameters (documented counts only) |
