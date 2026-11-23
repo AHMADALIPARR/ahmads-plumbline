@@ -823,11 +823,4 @@ Empty elements are `arg` and `var`. Unexpected forms raise errors.
 | Quipper | optional | Circuits |
 | Liquid | optional | Refinements |
 
-### Recommended next steps
-
-1. Implement `dense_steane_correct`.
-2. Replace the time-evolution stub with a Trotter step.
-3. Connect the Dex Life module to the Liquid binder.
-4. Add a Cabal test suite for the mask invariants.
-5. Pin the Nix inputs and commit a lock file.
 
