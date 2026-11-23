@@ -1,32 +1,33 @@
-# Ahmad's Plumbline — Demon's Hole Traversable Wormhole Transfer
+# Ahmad's Plumbline
 
-**SnapKitty Research Lab** · Bel esprit D'accord Trust  
-Researchers: Ahmad Ali Parr, Jessica Westerhoff
+**Technical abstract.**
+Ahmads-Plumbline is a multi-language research repository that assembles a dense, committed-choice parallel-logic runtime, a symbolic quantum circuit DSL with OpenQASM 3.0 emitters, and several distance-3/5 quantum error-correction circuit templates (Steane [[7,1,3]], rotated Surface-17 [[9,1,3]], and color-code variants).
 
-Dual-licensed under the **SNAPKITTY OPAQUE SOURCE LICENSE v1.0** and **GNU Affero General Public License v3.0**.
+**Dual license.** SNAPKITTY OPAQUE SOURCE LICENSE v1.0 **or** GNU Affero General Public License v3.0.
 
-See [LICENSE](LICENSE) and [LICENSE-AGPL-3.0.txt](LICENSE-AGPL-3.0.txt).
+### Dense ready-mask wave
 
-## 1. Circuit Model
+Rule: at time $t$, slot $i$ is marked if bit $((i+t)\bmod 16)$ is set; character density follows a sine envelope.
 
-\( U_{DH} \in U(2^{2N}) \) acts on \( \mathcal{H}_D \otimes \mathcal{H}_{sh} \cong (\mathbb{C}^2)^{\otimes N} \otimes (\mathbb{C}^2)^{\otimes N} \).
+```text
+  dense ready-mask  (16 slots, sine envelope)
+  t\i 0123456789012345
+ 0  *........%%%#+:.
+ 1  ........#%%#+-.
+ 2  .......#%%%*=: .
+ 3  ......*%%%*=: ..
+ 4  .....*%%%#+-....
+ 5  ....+#%%#*-.....
+ 6  ...+#%%%*=:.....
+ 7  ..=*%%%#+-......
+ 8  .-+#%%#+-.......
+ 9  -+#%%%*=........
+10  =*%%%#+........%
+11  *#%%#+........%%
+12  #%%%*........%%%
+13  %%%*........#%%#
+  ready bits travel left-to-right; density ~ sin
+  rule: bit((i+t) mod 16) and sine envelope
+```
 
-## Additional Components
-
-- `src/Parlog/parlog.dtd` — SGML DTD for Parlog programs (validated abstract syntax).
-- `cbits/raw_gc.{h,c}` — Raw C mark-sweep GC for Parlog term heap (FFI-friendly, independent of GHC RTS).
-- `nix/flake.nix` — Nix flake wrapping the Cabal build with `callCabal2nix` and a dev shell including `opensp` for DTD validation.
-- Racket remains the preferred host for the interpreter; POPLOG/Franz are legacy compatibility only.
-
-## Error-Corrected Manifolds
-
-| Code              | Data qubits / logical | 256 logical total data | Ancillas |
-|-------------------|-----------------------|------------------------|----------|
-| Steane [[7,1,3]]  | 7                     | 1792                   | 6        |
-| Surface-17 (d=3)  | 9                     | 2304                   | 8        |
-
-See `qasm/manifold_steane_qec.qasm` and `qasm/manifold_surface17_qec.qasm`.
-
-**License**: Dual — Snapkitty Opaque Source License v1.0 **OR** AGPLv3.  
-Commercial use requires separate written authorization under the Opaque terms.  
-Contact: A.parr@belespritdaccord.uk
+See the local README for the full architectural reference.
