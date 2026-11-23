@@ -171,6 +171,7 @@ Rule: at time $t$, slot $i$ is marked if bit $((i+t)\bmod 16)$ is set; character
 ```text
 ahmads-plumbline/
 ├── LICENSE
+├── LICENSE-AGPL-3.0.txt
 ├── README.md
 ├── ahmads-plumbline.cabal
 ├── cabal.project
@@ -184,6 +185,9 @@ ahmads-plumbline/
 │   ├── dense_parlog.c
 │   ├── raw_gc.c
 │   └── raw_gc.h
+├── docs/svg/
+│   ├── qubit-entanglement.svg
+│   └── wormhole-geometry.svg
 ├── nix/flake.nix
 ├── qasm/
 │   ├── manifold_colorcode_qec.qasm
@@ -191,6 +195,7 @@ ahmads-plumbline/
 │   └── manifold_surface17_qec.qasm
 ├── scala/QiskitTranspiler.scala
 └── src/
+    ├── AhmadsPlumbline/DemonHole.hs
     ├── DenseFFI.curry
     ├── DenseMorph.hs
     ├── DenseParlog.curry
@@ -219,6 +224,7 @@ ahmads-plumbline/
 | File path | Language / format | Mathematical topic | Primary symbols | Core responsibility | Related modules |
 |-----------|-------------------|--------------------|-----------------|---------------------|-----------------|
 | `LICENSE` | text | licensing | — | Dual license text | — |
+| `LICENSE-AGPL-3.0.txt` | text | licensing | — | AGPLv3 text | — |
 | `README.md` | Markdown | navigation | — | This document | — |
 | `ahmads-plumbline.cabal` | Cabal | build | library, executable | Package definition | `nix/flake.nix` |
 | `app/Main.hs` | Haskell | entry point | `main` | Cabal executable entry | library |
@@ -235,6 +241,7 @@ ahmads-plumbline/
 | `qasm/manifold_steane_qec.qasm` | OpenQASM 3.0 | Steane [[7,1,3]] | `steane_encode`, `rx_logical` | 1792-qubit manifold | `QuantumDSL.hs` |
 | `qasm/manifold_surface17_qec.qasm` | OpenQASM 3.0 | Surface-17 | `rx_surface17`, `surface17_qec` | 2304-qubit manifold | `QuantumDSL.hs` |
 | `scala/QiskitTranspiler.scala` | Scala | QASM processing | `transpile` | Pure-Scala header processor | — |
+| `src/AhmadsPlumbline/DemonHole.hs` | Haskell/Quipper | wormhole transfer | `ahmad_plumbline_udh` | Demon’s Hole U_DH circuit | Quipper |
 | `src/DenseFFI.curry` | Curry | FFI | external decls | Curry external declarations | `External_DenseFFI.hs` |
 | `src/DenseMorph.hs` | Haskell | lowering | `morphGoalsDense` | Linear morph into dense slots | `dense_parlog.c` |
 | `src/DenseParlog.curry` | Curry | logic | dense words | Curry dense-word sketch | — |
