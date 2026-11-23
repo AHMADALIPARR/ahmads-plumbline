@@ -77,7 +77,7 @@ corresponding to `D_INT`, `D_VAR`, `D_UNBOUND`. Payload extraction is an arithme
 For a goal \(g\) and variable index \(v < 64\),
 
 $$
-v \in \mathrm{wait\_mask}(g) \iff \text{the input-mode argument at } v \text{ is unbound}.
+v \in \mathrm{wait\_mask}(g) \iff \mathrm{the\ input-mode\ argument\ at\ } v \mathrm{\ is\ unbound}.
 $$
 
 Binding variable \(v\) executes
