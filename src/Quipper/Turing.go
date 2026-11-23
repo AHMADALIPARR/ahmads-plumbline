@@ -709,3 +709,67 @@ func ComputeTraceHash(trace *CircuitExecutionTrace) ([32]byte, uint32, uint64) {
 
 	return sha, crc, fnv.Sum64()
 }
+
+// ============================================================
+// ERROR CODES
+// ============================================================
+
+// TuringError is a stable numeric error code shared with the Haskell side.
+type TuringError uint16
+
+const (
+	ErrNone TuringError = iota
+	ErrInvalidMagic
+	ErrUnsupportedVersion
+	ErrChecksumMismatch
+	ErrGateCountMismatch
+	ErrWireCountMismatch
+	ErrEmptyCircuit
+	ErrInvalidGate
+	ErrDuplicateWire
+	ErrQubitCountMismatch
+)
+
+func (e TuringError) Error() string {
+	switch e {
+	case ErrNone:
+		return "no error"
+	case ErrInvalidMagic:
+		return "invalid magic header"
+	case ErrUnsupportedVersion:
+		return "unsupported version"
+	case ErrChecksumMismatch:
+		return "checksum mismatch"
+	case ErrGateCountMismatch:
+		return "gate count mismatch"
+	case ErrWireCountMismatch:
+		return "wire count mismatch"
+	case ErrEmptyCircuit:
+		return "empty circuit"
+	case ErrInvalidGate:
+		return "invalid gate"
+	case ErrDuplicateWire:
+		return "duplicate wire id"
+	case ErrQubitCountMismatch:
+		return "qubit count mismatch"
+	default:
+		return fmt.Sprintf("unknown error code %d", e)
+	}
+}
+
+// ValidateCircuitWithCodes returns a TuringError instead of a generic error.
+func ValidateCircuitWithCodes(c *QuipperCircuit) TuringError {
+	if c == nil || c.GateCount == 0 {
+		return ErrEmptyCircuit
+	}
+	if c.CircuitID == 0 {
+		return ErrInvalidMagic
+	}
+	if uint32(len(c.Gates)) != c.GateCount {
+		return ErrGateCountMismatch
+	}
+	if uint32(len(c.Wires)) != c.WireCount {
+		return ErrWireCountMismatch
+	}
+	return ErrNone
+}
