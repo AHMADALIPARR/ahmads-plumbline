@@ -37,4 +37,14 @@ void gc_push_root(Term **slot);
 void gc_pop_roots(size_t count);
 Term *gc_alloc(TermTag tag);
 void gc_collect(void);
+
+// Safe field accessors (avoid fragile Storable offsets)
+TermTag term_tag(const Term *t);
+void    term_set_int(Term *t, int64_t v);
+int64_t term_get_int(const Term *t);
+void    term_bind_var(Term *var, Term *val);
+Term   *term_get_binding(const Term *var);
+void    term_set_cons(Term *t, Term *head, Term *tail);
+Term   *term_get_head(const Term *t);
+Term   *term_get_tail(const Term *t);
 #endif
