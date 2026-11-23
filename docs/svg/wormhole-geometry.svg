@@ -2,11 +2,15 @@
   <title>Wormhole spatial geometry</title>
   <desc>Illustrative embedding of a Morris-Thorne traversable wormhole throat. Two asymptotic regions joined by a narrow throat at r0.</desc>
   <g fill="none" stroke="#1a1a1a" stroke-width="1.2" stroke-linecap="round">
+    <!-- Left asymptotic region -->
     <path d="M20 90 C 60 40, 100 30, 140 90" />
     <path d="M20 90 C 60 140, 100 150, 140 90" />
+    <!-- Throat -->
     <ellipse cx="160" cy="90" rx="18" ry="8" />
+    <!-- Right asymptotic region -->
     <path d="M180 90 C 220 40, 260 30, 300 90" />
     <path d="M180 90 C 220 140, 260 150, 300 90" />
+    <!-- Connectivity arrows -->
     <path d="M70 70 L 90 70" marker-end="url(#arrow)" />
     <path d="M230 70 L 250 70" marker-end="url(#arrow)" />
   </g>
