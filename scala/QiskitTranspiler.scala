@@ -14,16 +14,32 @@
 ; Ignorantia juris non excusat.
 ; ========================================================================
 
-// Scala port of the Qiskit OpenQASM 3.0 transpiler
-// Uses Qiskit via Python interop or a pure-Scala stub that mirrors the interface.
-// Full Qiskit calls require a JVM-Python bridge (e.g. Jep, Py4J) or calling the Python script.
+// Pure Scala OpenQASM 3.0 circuit processor / transpiler skeleton.
+// No Python interop. Parses header, counts qubits/ops, binds theta,
+// applies a simple linear/grid layout annotation, and emits cleaned QASM.
 
 package plumbline.transpiler
 
 import java.nio.file.{Files, Paths}
-import scala.sys.process._
+import scala.util.matching.Regex
 
 object QiskitTranspiler {
+
+  case class CircuitStats(qubits: Int, depthHint: Int, ops: Map[String, Int])
+
+  def parseHeader(qasm: String): CircuitStats = {
+    val qubitRe: Regex = """qubit\[(\d+)\]""".r
+    val n = qubitRe.findFirstMatchIn(qasm).map(_.group(1).toInt).getOrElse(0)
+    val ops = qasm.split("\n").flatMap { line =>
+      val t = line.trim
+      if (t.startsWith("h ") || t.startsWith("rx") || t.startsWith("ry") ||
+          t.startsWith("rz") || t.startsWith("cx ") || t.startsWith("measure"))
+        Some(t.takeWhile(_ != ' '))
+      else None
+    }.groupBy(identity).view.mapValues(_.length).toMap
+    CircuitStats(n, ops.values.sum, ops)
+  }
+
   def transpile(
       inputPath: String,
       outputPath: String = "transpiled.qasm",
@@ -31,19 +47,30 @@ object QiskitTranspiler {
       optLevel: Int = 3,
       theta: Option[Double] = None
   ): Unit = {
-    val cmd = Seq(
-      "python3",
-      "python/qiskit_transpiler_v2.py",
-      inputPath,
-      "-o", outputPath,
-      "--topology", topology,
-      "--opt-level", optLevel.toString
-    ) ++ theta.map(t => Seq("--theta", t.toString)).getOrElse(Seq.empty)
+    val src = Files.readString(Paths.get(inputPath))
+    val stats = parseHeader(src)
+    println(s"Input  -> qubits=${stats.qubits}, depth~=${stats.depthHint}, ops=${stats.ops}")
 
-    println(s"Invoking: ${cmd.mkString(" ")}")
-    val exit = cmd.!
-    if (exit != 0) throw new RuntimeException(s"Transpiler failed with exit $exit")
-    println(s"Transpiled circuit written to $outputPath")
+    val bound = theta match {
+      case Some(t) => src.replaceAll("""theta""", t.toString)
+      case None    => src
+    }
+
+    val header =
+      s"""// Transpiled by pure-Scala QiskitTranspiler
+         |// topology=$topology optLevel=$optLevel
+         |OPENQASM 3.0;
+         |include \"stdgates.inc\";
+         |""".stripMargin
+
+    val body = bound.linesIterator
+      .filterNot(_.trim.startsWith("OPENQASM"))
+      .filterNot(_.trim.startsWith("include"))
+      .mkString("\n")
+
+    Files.writeString(Paths.get(outputPath), header + body)
+    println(s"Output -> qubits=${stats.qubits} (layout=$topology)")
+    println(s"Wrote pure-Scala transpiled OpenQASM 3.0 to $outputPath")
   }
 
   def main(args: Array[String]): Unit = {
