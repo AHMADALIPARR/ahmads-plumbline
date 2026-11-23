@@ -1,4 +1,5 @@
 // Circuit: QSharp_ManifoldGreedyStep_Surface17
+// Physical qubit count: 2304 data (256 logical × 9) + 8 reusable ancillas
 OPENQASM 3.0;
 include "stdgates.inc";
 
