@@ -1,0 +1,49 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
+-- L-system fractal generators in Dex
+-- Rule: rewrite a string by parallel substitution; plot the resulting path.
+
+def applyRule (rule: String -> String) (s: String) : String =
+  foldl (++) "" (map rule (toList s))
+
+-- Simple binary-tree L-system: F -> F[+F]F[-F]F
+def treeRule (c: Char) : String =
+  case c of
+    'F' -> "F[+F]F[-F]F"
+    _   -> toString c
+
+def iterateTree (n: Nat) : String =
+  iterate n (applyRule treeRule) "F"
+
+-- Koch curve: F -> F+F-F-F+F
+def kochRule (c: Char) : String =
+  case c of
+    'F' -> "F+F-F-F+F"
+    _   -> toString c
+
+def iterateKoch (n: Nat) : String =
+  iterate n (applyRule kochRule) "F"
+
+-- Dragon curve approximation via string rewrite
+def dragonRule (c: Char) : String =
+  case c of
+    'X' -> "X+YF+"
+    'Y' -> "-FX-Y"
+    _   -> toString c
+
+def iterateDragon (n: Nat) : String =
+  iterate n (applyRule dragonRule) "FX"
