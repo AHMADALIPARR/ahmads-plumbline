@@ -1,21 +1,21 @@
+========================================================================
+; SOVEREIGN LEVIATHAN NODE LICENSE
+; License-ID: SL-AGPL3-001 | Covenant-Version: 1.0
+; SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001
+; Copyright (C) 2026 SnapKittyWest. Ahmad Ali Parr, Bel Esprit D'Accord Irrevocable Trust.
+; ========================================================================
+;
+; This file is a covered work under the GNU Affero General Public License,
+; version 3, together with the Sovereign Leviathan additional terms.
+;
+; Hark, though this node be but a spark,
+; Its covenant endureth through the dark.
+;
+; Ignorantia juris non excusat.
+; ========================================================================
+
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
-
-{-
-  Ahmad's Plumbline — Demon's Hole Traversable Wormhole Transfer
-
-  Copyright (C) 2026 Ahmad Ali Parr, Jessica Westerhoff, SnapKitty Research Lab
-  Bel esprit D'accord Trust
-
-  This work is dual-licensed under:
-  - SNAPKITTY OPAQUE SOURCE LICENSE v1.0 (see LICENSE)
-  - GNU Affero General Public License v3.0 (see LICENSE-AGPL-3.0.txt)
-
-  You may choose either license. For commercial use beyond AGPL obligations,
-  contact the Licensor for written authorization under the Opaque terms.
-
-  SPDX-License-Identifier: LicenseRef-Sovereign-Leviathan-SL-AGPL3-001 OR AGPL-3.0-only
--}
 
 module AhmadsPlumbline.DemonHole where
 
