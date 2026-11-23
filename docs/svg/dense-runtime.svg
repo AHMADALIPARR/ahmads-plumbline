@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 160" width="320" height="160">
+  <title>Dense PARLOG Runtime</title>
+  <desc>Goal table, ready mask, and scheduler</desc>
+  <rect x="10" y="10" width="140" height="90" fill="none" stroke="#333" stroke-width="1"/>
+  <text x="80" y="28" text-anchor="middle" font-size="10" font-family="system-ui">Goal Table</text>
+  <line x1="10" y1="35" x2="150" y2="35" stroke="#333" stroke-width="0.5"/>
+  <text x="30" y="50" font-size="8" font-family="system-ui">ID</text>
+  <text x="60" y="50" font-size="8" font-family="system-ui">Mask</text>
+  <text x="100" y="50" font-size="8" font-family="system-ui">State</text>
+  <text x="30" y="65" font-size="8" font-family="monospace">0</text>
+  <text x="60" y="65" font-size="8" font-family="monospace">00</text>
+  <text x="100" y="65" font-size="8" font-family="monospace">READY</text>
+  <text x="30" y="80" font-size="8" font-family="monospace">1</text>
+  <text x="60" y="80" font-size="8" font-family="monospace">04</text>
+  <text x="100" y="80" font-size="8" font-family="monospace">WAIT</text>
+  <rect x="170" y="30" width="140" height="50" fill="none" stroke="#333" stroke-width="1"/>
+  <text x="240" y="50" text-anchor="middle" font-size="10" font-family="system-ui">Ready Mask</text>
+  <text x="240" y="68" text-anchor="middle" font-size="9" font-family="monospace">ready ⊆ active</text>
+  <path d="M150 55 L170 55" stroke="#333" stroke-width="1" marker-end="url(#arr)"/>
+  <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#333"/></marker></defs>
+</svg>
